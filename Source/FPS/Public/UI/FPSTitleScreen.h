@@ -5,6 +5,7 @@
 #include "FPSTitleScreen.generated.h"
 
 class UButton;
+class UEditableTextBox;
 
 /**
  * 标题界面
@@ -28,6 +29,10 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UButton* ExitButton;
 
+    /** 玩家名输入框 */
+    UPROPERTY(meta = (BindWidget))
+    UEditableTextBox* PlayerNameInput;
+
     /** 大厅界面类（蓝图 ClassDefaults 中设置） */
     UPROPERTY(EditDefaultsOnly, Category = "Navigation")
     TSubclassOf<UUserWidget> LobbyScreenClass;
@@ -47,4 +52,7 @@ private:
 
     UFUNCTION()
     void OnExitClicked();
+
+    UFUNCTION()
+    void OnPlayerNameCommitted(const FText& Text, ETextCommit::Type CommitType);
 };

@@ -286,3 +286,11 @@ void UFPSGameInstance::OnDestroySessionComplete(FName SessionName, bool bSuccess
 		ExecuteCreateSession(ServerName);
 	}
 }
+
+void UFPSGameInstance::ReturnToMainMenu()
+{
+	DestroyCurrentSession();
+
+	// 加载主菜单地图
+	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/MyAsset/Lvl_MainMenu")), true);
+}

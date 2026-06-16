@@ -9,6 +9,7 @@ enum class EWeaponTargetSlot : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponActivated, AWeaponActor*, Weapon);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCharacterDeath);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterKilled, AFPS_CharacterBase*, Victim, AController*, KillerController);
 
 UCLASS(config = Game)
 class FPS_API AFPS_CharacterBase : public ACharacter
@@ -62,6 +63,10 @@ public:
     /** 角色死亡时广播 */
     UPROPERTY(BlueprintAssignable, Category = "角色|战斗")
     FOnCharacterDeath OnDeath;
+
+    /** 角色被击杀时广播（携带击杀者控制器，供GameMode计分） */
+    UPROPERTY(BlueprintAssignable, Category = "角色|战斗")
+    FOnCharacterKilled OnKilled;
 
     /** 死亡后自动销毁延迟（秒），仅 AI 使用；0=不销毁 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "角色|战斗")
@@ -190,4 +195,8 @@ protected:
     FTimerHandle DeathDestroyTimerHandle;
     bool bFootstepActive = false;
     bool bIsDead = false;
+
+    /** 最近一次伤害的施加者（TakeDamage中缓存，HandleDeath中通过OnKilled广播） */
+    UPROPERTY(Transient)
+    TObjectPtr<AController> LastDamageInstigator = nullptr;
 };

@@ -81,6 +81,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void CreateRoomWithMap(const FString& ServerName, const FString& MapName);
 
+	/** 返回主菜单（销毁会话并加载 Lvl_MainMenu） */
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void ReturnToMainMenu();
+
 private:
 	// ---------- Session 回调 ----------
 	void OnCreateSessionComplete(FName SessionName, bool bSuccess);

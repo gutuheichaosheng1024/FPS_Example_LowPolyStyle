@@ -26,6 +26,10 @@ public:
     UPROPERTY()
     bool bFullscreen = true;
 
+    /** 玩家用户名 */
+    UPROPERTY()
+    FString PlayerName = TEXT("Player");
+
     static const FString SaveSlotName;
     static const int32 UserIndex;
 
@@ -33,7 +37,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static UFPSSaveGame* LoadSettings();
 
-    /** 保存设置 */
+    /** 保存设置（保留已存储的 PlayerName） */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static void SaveSettings(float Master, float Background, const FString& Res, bool bInFullscreen);
+
+    /** 读取用户名，不存在返回 "Player" */
+    UFUNCTION(BlueprintCallable, Category = "Settings")
+    static FString LoadPlayerName();
+
+    /** 保存用户名（保留已存储的其他设置） */
+    UFUNCTION(BlueprintCallable, Category = "Settings")
+    static void SavePlayerName(const FString& Name);
 };

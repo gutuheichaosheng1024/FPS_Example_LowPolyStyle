@@ -115,6 +115,7 @@ float AFPS_CharacterBase::TakeDamage(float DamageAmount, FDamageEvent const& Dam
     if (CurrentHealth <= 0.f)
     {
         bIsDead = true;
+        LastDamageInstigator = EventInstigator;  // 缓存击杀者（HandleDeath通过OnKilled广播）
         HandleDeath();            // 服务器权威状态变更
         Multicast_OnDeath();      // 广播死亡表现给所有客户端
         OnDeath.Broadcast();      // 本地委托（蓝图可绑定）
@@ -135,20 +136,16 @@ void AFPS_CharacterBase::HandleDeath()
         MoveComp->DisableMovement();
     }
 
-    // 先清除引用，防止 OnRep 回调访问已销毁武器
-    AWeaponActor* PrevWeapon = CurrentWeapon;
-    CurrentWeapon = nullptr;
-
-    // 停用并销毁所有手持武器
-    for (AWeaponActor* Weapon : WeaponInventory)
+    // 停用武器引用（不销毁——随Actor::Destroy()自动清理）
+    if (CurrentWeapon)
     {
-        if (Weapon)
-        {
-            Weapon->DeactivateWeapon();
-            Weapon->Destroy();
-        }
+        CurrentWeapon->DeactivateWeapon();
     }
+    CurrentWeapon = nullptr;
     WeaponInventory.Empty();
+
+    // 广播击杀事件（GameMode绑定此委托→计分+重生调度）
+    OnKilled.Broadcast(this, LastDamageInstigator);
 }
 
 void AFPS_CharacterBase::Multicast_OnDeath_Implementation()

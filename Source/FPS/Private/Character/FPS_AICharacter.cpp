@@ -102,30 +102,24 @@ void AFPS_AICharacter::ReloadWeapon()
 
 void AFPS_AICharacter::HandleDeath()
 {
-    // 服务器权威：停止射击 + 停止行为树
-    StopFiring();
-    if (AAIController* AICon = Cast<AAIController>(Controller))
-    {
-        AICon->BrainComponent->StopLogic(TEXT("Death"));
-    }
+	// 服务器权威：停止射击 + 停止行为树
+	StopFiring();
+	if (AAIController* AICon = Cast<AAIController>(Controller))
+	{
+		AICon->BrainComponent->StopLogic(TEXT("Death"));
+	}
 
-    Super::HandleDeath();  // 销毁武器 + 禁用碰撞 + 禁用移动
-
-    // 延迟销毁
-    if (DeathDestroyDelay > 0.f)
-        SetLifeSpan(DeathDestroyDelay);
-    else
-        Destroy();
+	Super::HandleDeath();  // 禁用碰撞+移动 + 广播OnKilled（触发GM计分+Destroy+重生调度）
 }
 
 void AFPS_AICharacter::Multicast_OnDeath_Implementation()
 {
-    Super::Multicast_OnDeath_Implementation();
+	Super::Multicast_OnDeath_Implementation();
 
-    // 客户端表现：布娃娃
-    if (USkeletalMeshComponent* MeshTP = GetMesh())
-    {
-        MeshTP->SetSimulatePhysics(true);
-        MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
-    }
+	// 客户端表现：布娃娃（角色由GameMode延迟销毁，布娃娃随之清理）
+	if (USkeletalMeshComponent* MeshTP = GetMesh())
+	{
+		MeshTP->SetSimulatePhysics(true);
+		MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
+	}
 }

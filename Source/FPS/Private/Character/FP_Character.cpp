@@ -205,31 +205,31 @@ USkeletalMeshComponent* AFP_Character::GetFPAnimMesh() const
 
 void AFP_Character::HandleDeath()
 {
-    Super::HandleDeath();  // 销毁武器 + 禁用碰撞 + 禁用移动
+	Super::HandleDeath();  // 禁用碰撞+移动 + 广播OnKilled（触发GM计分+重生UI推送）
 }
 
 void AFP_Character::Multicast_OnDeath_Implementation()
 {
-    Super::Multicast_OnDeath_Implementation();
+	Super::Multicast_OnDeath_Implementation();
 
-    // 禁用玩家输入（客户端本地）
-    if (APlayerController* PC = Cast<APlayerController>(Controller))
-    {
-        DisableInput(PC);
-    }
+	// 禁用玩家输入（客户端本地）
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		DisableInput(PC);
+	}
 
-    // 销毁 FP 网格及其上挂载的 FP 武器模型
-    if (Mesh1P)
-    {
-        Mesh1P->DestroyComponent();
-    }
+	// 销毁 FP 网格（FP武器随Mesh1P销毁自动清理）
+	if (Mesh1P)
+	{
+		Mesh1P->DestroyComponent();
+	}
 
-    // TP 网格本地可见 + 布娃娃 + 禁用 ABP
-    if (USkeletalMeshComponent* MeshTP = GetMesh())
-    {
-        MeshTP->SetOwnerNoSee(false);
-        MeshTP->SetSimulatePhysics(true);
-        MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
-        MeshTP->SetAnimInstanceClass(nullptr);
-    }
+	// TP 网格：布娃娃（角色由GameMode延迟销毁，布娃娃随之清理）
+	if (USkeletalMeshComponent* MeshTP = GetMesh())
+	{
+		MeshTP->SetOwnerNoSee(false);
+		MeshTP->SetSimulatePhysics(true);
+		MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshTP->SetAnimInstanceClass(nullptr);
+	}
 }
