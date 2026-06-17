@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "UI/FPSCrosshairWidget.h"
 #include "FPSSaveGame.generated.h"
 
 /**
@@ -30,6 +31,44 @@ public:
     UPROPERTY()
     FString PlayerName = TEXT("Player");
 
+    // ---------- 准星配置 ----------
+    UPROPERTY()
+    int32 CrosshairShape = 2;
+
+    UPROPERTY()
+    bool CrosshairShowCenterDot = true;
+
+    UPROPERTY()
+    float CrosshairCenterDotRadius = 2.f;
+
+    UPROPERTY()
+    FLinearColor CrosshairCenterDotColor = FLinearColor::White;
+
+    UPROPERTY()
+    float CrosshairCircleRadius = 14.f;
+
+    UPROPERTY()
+    float CrosshairCircleThickness = 2.f;
+
+    UPROPERTY()
+    bool CrosshairCircleFilled = false;
+
+    UPROPERTY()
+    float CrosshairBarLength = 14.f;
+
+    UPROPERTY()
+    float CrosshairBarThickness = 3.f;
+
+    UPROPERTY()
+    float CrosshairBarGap = 6.f;
+
+    UPROPERTY()
+    FLinearColor CrosshairColor = FLinearColor(0.f, 1.f, 0.f, 0.9f);
+
+    UPROPERTY()
+    float CrosshairOverallScale = 1.f;
+
+    // ---------- 存档常量 ----------
     static const FString SaveSlotName;
     static const int32 UserIndex;
 
@@ -48,4 +87,12 @@ public:
     /** 保存用户名（保留已存储的其他设置） */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static void SavePlayerName(const FString& Name);
+
+    /** 保存准星配置 */
+    UFUNCTION(BlueprintCallable, Category = "Settings")
+    static void SaveCrosshairConfig(const FCrosshairConfig& Config);
+
+    /** 加载准星配置，不存在返回默认值 */
+    UFUNCTION(BlueprintCallable, Category = "Settings")
+    static FCrosshairConfig LoadCrosshairConfig();
 };

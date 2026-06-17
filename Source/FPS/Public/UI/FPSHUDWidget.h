@@ -4,6 +4,8 @@
 #include "UI/FPSBaseMenuWidget.h"
 #include "FPSHUDWidget.generated.h"
 
+class UFPSCrosshairWidget;
+
 /**
  * HUD Widget 基类（纯流程）
  *
@@ -26,6 +28,14 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	/** 准星控件（C++ 动态创建，不在 Designer 拖放） */
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	TObjectPtr<UFPSCrosshairWidget> CrosshairWidget;
+
+	/** 准星控件类（蓝图 ClassDefaults 中设置） */
+	UPROPERTY(EditDefaultsOnly, Category = "HUD")
+	TSubclassOf<UFPSCrosshairWidget> CrosshairWidgetClass;
 
 	/** 刷新间隔（秒） */
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")

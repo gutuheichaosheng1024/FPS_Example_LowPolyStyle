@@ -1,4 +1,6 @@
 #include "UI/FPSHUDWidget.h"
+#include "UI/FPSCrosshairWidget.h"
+#include "UI/FPSSaveGame.h"
 
 UFPSHUDWidget::UFPSHUDWidget()
 {
@@ -8,6 +10,20 @@ void UFPSHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	TimeSinceLastRefresh = 0.f;
+
+	// 动态创建准星控件（一次性加载配置）
+	if (CrosshairWidgetClass)
+	{
+		CrosshairWidget = CreateWidget<UFPSCrosshairWidget>(this, CrosshairWidgetClass);
+		if (CrosshairWidget)
+		{
+			const FCrosshairConfig Saved = UFPSSaveGame::LoadCrosshairConfig();
+			CrosshairWidget->ApplyConfig(Saved);
+
+			// 添加到视口（蓝图可在 Designer 中通过 Canvas 占位控制位置）
+			CrosshairWidget->AddToViewport(0);
+		}
+	}
 
 	// 首次立即刷新
 	if (bAutoRefresh)
