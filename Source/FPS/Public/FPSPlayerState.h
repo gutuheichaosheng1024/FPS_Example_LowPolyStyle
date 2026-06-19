@@ -36,4 +36,16 @@ public:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Score")
 	int32 Deaths = 0;
+
+	/** 游戏剩余时间（秒，由 GameMode 每秒更新，Replicated 到所有客户端） */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game")
+	float RemainingTime = 0.f;
+
+	/** 游戏开始时的服务器时间戳（Replicated，客户端用 GetServerWorldTimeSeconds 计算精确剩余时间） */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game")
+	float GameStartTime = 0.f;
+
+	/** 游戏总时长（秒，Replicated，客户端配合 GameStartTime 计算剩余时间） */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game")
+	float GameDuration = 0.f;
 };

@@ -29,6 +29,7 @@ enum class EWeaponTargetSlot : uint8
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponReady);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHitConfirmed, bool, bKilled);
 
 UCLASS(BlueprintType)
 class FPS_API AWeaponActor : public AActor
@@ -39,6 +40,9 @@ public:
     AWeaponActor();
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    /** Owner 复制到客户端时设置 OwningCharacter（解决客户端 OwningCharacter 为 null 的问题） */
+    virtual void OnRep_Owner() override;
 
     bool Equip(AFPS_CharacterBase* TargetCharacter);
     void ActivateWeapon();
@@ -58,6 +62,9 @@ public:
     bool AreWeaponActionsLocked() const { return bWeaponActionsLocked; }
 
     bool HasAnyAmmo() const { return CurrentAmmo > 0 || TotalAmmo > 0; }
+
+    UFUNCTION(BlueprintPure, Category = "Weapon|Audio")
+    UWeaponAudioConfig* GetAudioConfig() const { return AudioConfig; }
     void NotifyOwnerOutOfAmmo();
 
     /** 重置后坐力图案索引（换弹/切换武器时调用） */
@@ -66,6 +73,10 @@ public:
 
     UPROPERTY(BlueprintAssignable)
     FOnWeaponReady OnWeaponReady;
+
+    /** 命中确认委托（服务器端命中时广播，PlayerController 订阅） */
+    UPROPERTY(BlueprintAssignable, Category = "Weapon|Combat")
+    FOnHitConfirmed OnHitConfirmed;
 
     void TryBindInput();
 

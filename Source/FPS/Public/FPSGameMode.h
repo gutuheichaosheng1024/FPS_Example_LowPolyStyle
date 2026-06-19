@@ -107,8 +107,14 @@ public:
 protected:
 	// ---------- 内部方法 ----------
 
-	/** 游戏计时器 Tick（每秒） */
+	/** 游戏计时器 Tick（每 0.1 秒） */
 	void TickGameTimer();
+
+	/** 同步 GameStartTime/GameDuration 到所有 PlayerState */
+	void SyncGameTimeToAllPlayers();
+
+	/** 同步 GameStartTime/GameDuration 到单个 PlayerState */
+	void SyncGameTimeToPlayer(AFPSPlayerState* PS);
 
 	/** 执行击杀计分 */
 	void RegisterKill(AController* Killer, AController* Victim);
@@ -133,6 +139,9 @@ protected:
 	void ReturnAIName(const FString& Name);
 
 	// ---------- 服务器内存状态 ----------
+
+	/** 游戏开始时的服务器时间戳 */
+	float GameStartTime = 0.f;
 
 	/** 计分板 */
 	TArray<FPlayerScoreData> Scoreboard;

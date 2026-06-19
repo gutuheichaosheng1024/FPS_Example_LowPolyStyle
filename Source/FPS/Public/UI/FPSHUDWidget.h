@@ -5,6 +5,9 @@
 #include "FPSHUDWidget.generated.h"
 
 class UFPSCrosshairWidget;
+class UFPSHitMarkerWidget;
+class UFPSKillIndicatorWidget;
+class USoundBase;
 
 /**
  * HUD Widget 基类（纯流程）
@@ -25,6 +28,22 @@ class FPS_API UFPSHUDWidget : public UFPSBaseMenuWidget
 public:
 	UFPSHUDWidget();
 
+	/** 显示命中提示 */
+	UFUNCTION(BlueprintCallable, Category = "HUD|HitMarker")
+	void ShowHitMarker();
+
+	/** 显示击杀指示器（追加一个图标） */
+	UFUNCTION(BlueprintCallable, Category = "HUD|KillIndicator")
+	void ShowKillIndicator();
+
+	/** 播放命中确认音效（仅本地玩家听到） */
+	UFUNCTION(BlueprintCallable, Category = "HUD|HitMarker")
+	void PlayHitConfirmSound(USoundBase* Sound);
+
+	/** 播放击杀确认音效（仅本地玩家听到） */
+	UFUNCTION(BlueprintCallable, Category = "HUD|KillIndicator")
+	void PlayKillConfirmSound(USoundBase* Sound);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -36,6 +55,18 @@ protected:
 	/** 准星控件类（蓝图 ClassDefaults 中设置） */
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")
 	TSubclassOf<UFPSCrosshairWidget> CrosshairWidgetClass;
+
+	// ---------- 命中提示（蓝图 Designer 中放置，BindWidget 绑定） ----------
+
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|HitMarker")
+	TObjectPtr<UFPSHitMarkerWidget> HitMarkerWidget;
+
+	// ---------- 击杀指示器（蓝图 Designer 中放置，BindWidget 绑定） ----------
+
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|KillIndicator")
+	TObjectPtr<UFPSKillIndicatorWidget> KillIndicatorWidget;
+
+	// ---------- 配置 ----------
 
 	/** 刷新间隔（秒） */
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")

@@ -31,15 +31,13 @@ void UFPSGameEndWidget::UpdateScoreboard(
 
 FString UFPSGameEndWidget::BuildRow(const FString& StyleTag, const FString& Name, float Score, int32 Kills) const
 {
-	// 名称部分带 RichText 样式标签，其余为普通文本
-	FString StyledName = FString::Printf(TEXT("<%s>%s</>"), *StyleTag, *Name);
-
+	// 整行包裹在样式标签内，确保中文字符使用支持中文的字体
 	FString Row = RowFormat;
-	Row.ReplaceInline(TEXT("{Name}"), *StyledName);
+	Row.ReplaceInline(TEXT("{Name}"), *Name);
 	Row.ReplaceInline(TEXT("{Score}"), *FString::SanitizeFloat(Score, 0));
 	Row.ReplaceInline(TEXT("{Kills}"), *FString::FromInt(Kills));
 
-	return Row;
+	return FString::Printf(TEXT("<%s>%s</>"), *StyleTag, *Row);
 }
 
 void UFPSGameEndWidget::OnBackToLobbyClicked()

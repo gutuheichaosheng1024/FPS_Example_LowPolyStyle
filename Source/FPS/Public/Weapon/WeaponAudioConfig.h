@@ -29,4 +29,12 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
     USoundBase* DryFireSound;
+
+    /** 命中确认音效（仅本地玩家听到） */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+    USoundBase* HitConfirmSound;
+
+    /** 击杀确认音效（仅本地玩家听到） */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+    USoundBase* KillConfirmSound;
 };

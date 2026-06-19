@@ -11,6 +11,7 @@
 AFPSGameMode::AFPSGameMode()
 {
 	bReplicates = true;
+	PlayerStateClass = AFPSPlayerState::StaticClass();
 }
 
 void AFPSGameMode::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -30,8 +31,12 @@ void AFPSGameMode::BeginPlay()
 
 	// 启动游戏倒计时
 	bGameActive = true;
+	GameStartTime = GetWorld()->GetTimeSeconds();
 	RemainingTime = GameDuration;
-	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &AFPSGameMode::TickGameTimer, 1.f, true);
+	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &AFPSGameMode::TickGameTimer, 0.1f, true);
+
+	// 同步时间戳到已连接的玩家
+	SyncGameTimeToAllPlayers();
 }
 
 // ======================================================================
@@ -47,6 +52,9 @@ void AFPSGameMode::RestartPlayer(AController* NewPlayer)
 	if (AFPSPlayerState* PS = NewPlayer->GetPlayerState<AFPSPlayerState>())
 	{
 		PS->ResetSurvivalTime();
+
+		// 同步游戏时间到新玩家（可能中途加入）
+		SyncGameTimeToPlayer(PS);
 	}
 
 	// 绑定新角色的死亡委托
@@ -86,7 +94,9 @@ void AFPSGameMode::TickGameTimer()
 {
 	if (!bGameActive) return;
 
-	RemainingTime -= 1.f;
+	// 计算剩余时间（基于服务器时间戳，精度更高）
+	const float Elapsed = GetWorld()->GetTimeSeconds() - GameStartTime;
+	RemainingTime = FMath::Max(GameDuration - Elapsed, 0.f);
 
 	if (RemainingTime <= 0.f)
 	{
@@ -106,6 +116,15 @@ void AFPSGameMode::OnCharacterKilled(AFPS_CharacterBase* Victim, AController* Ki
 	AController* VictimController = Victim->GetController();
 
 	RegisterKill(KillerController, VictimController);
+
+	// 通知击杀者客户端显示击杀指示器
+	if (KillerController && KillerController != VictimController)
+	{
+		if (AFPSPlayerController* KillerPC = Cast<AFPSPlayerController>(KillerController))
+		{
+			KillerPC->Client_OnKillConfirmed();
+		}
+	}
 
 	// 分支：AI vs 玩家
 	if (Cast<AFPS_AICharacter>(Victim))
@@ -274,18 +293,44 @@ void AFPSGameMode::EndGame()
 	// 给每个玩家客户端推送游戏结束UI
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
-		if (AFPSPlayerController* PC = Cast<AFPSPlayerController>(*It))
+		if (AFPSPlayerController* FPSPC = Cast<AFPSPlayerController>(It->Get()))
 		{
 			FPlayerScoreData Top1 = Scoreboard.Num() > 0 ? Scoreboard[0] : FPlayerScoreData();
 			FPlayerScoreData Top2 = Scoreboard.Num() > 1 ? Scoreboard[1] : FPlayerScoreData();
 			FPlayerScoreData Top3 = Scoreboard.Num() > 2 ? Scoreboard[2] : FPlayerScoreData();
 
-			PC->Client_GameEnd(
+			FPSPC->Client_GameEnd(
 				Top1.PlayerName, Top1.TotalScore, Top1.Kills,
 				Top2.PlayerName, Top2.TotalScore, Top2.Kills,
 				Top3.PlayerName, Top3.TotalScore, Top3.Kills);
 		}
 	}
+}
+
+// ======================================================================
+// 时间同步
+// ======================================================================
+
+void AFPSGameMode::SyncGameTimeToAllPlayers()
+{
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		if (PC)
+		{
+			if (AFPSPlayerState* PS = PC->GetPlayerState<AFPSPlayerState>())
+			{
+				SyncGameTimeToPlayer(PS);
+			}
+		}
+	}
+}
+
+void AFPSGameMode::SyncGameTimeToPlayer(AFPSPlayerState* PS)
+{
+	if (!PS) return;
+	PS->GameStartTime = GameStartTime;
+	PS->GameDuration = GameDuration;
 }
 
 TArray<FPlayerScoreData> AFPSGameMode::GetTopPlayers(int32 Count) const

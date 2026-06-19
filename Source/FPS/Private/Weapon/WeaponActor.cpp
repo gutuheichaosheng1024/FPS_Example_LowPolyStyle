@@ -56,6 +56,24 @@ void AWeaponActor::OnRep_CurrentAmmo()
     // 可用于更新UI弹药显示
 }
 
+void AWeaponActor::OnRep_Owner()
+{
+    Super::OnRep_Owner();
+
+    // 客户端收到 Owner 复制后，将 AActor::Owner 桥接到 OwningCharacter
+    // 解决客户端 OwningCharacter 为 null 导致武器操作全部失效的问题
+    if (!OwningCharacter)
+    {
+        if (AFPS_CharacterBase* Char = Cast<AFPS_CharacterBase>(GetOwner()))
+        {
+            OwningCharacter = Char;
+
+            // 尝试绑定输入（OnRep_Owner 可能在 OnRep_CurrentWeapon 之后到达）
+            TryBindInput();
+        }
+    }
+}
+
 void AWeaponActor::BeginPlay()
 {
     Super::BeginPlay();
@@ -619,7 +637,15 @@ void AWeaponActor::Server_RequestFire_Implementation(FVector ShootLocation, FVec
     const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, ShootLocation, ShootLocation + ShotDirection * 10000.f, ECC_GameTraceChannel1, Params);
 
     if (bHit)
+    {
         ApplyDamage(Hit, ShotDirection);
+
+        // 仅命中玩家/AI角色时广播命中委托（不触发环境物体命中反馈）
+        if (AFPS_CharacterBase* HitChar = Cast<AFPS_CharacterBase>(Hit.GetActor()))
+        {
+            OnHitConfirmed.Broadcast(HitChar->IsDead());
+        }
+    }
 
     // AI 听觉噪音
     UAISense_Hearing::ReportNoiseEvent(GetWorld(), OwningCharacter->GetActorLocation(),

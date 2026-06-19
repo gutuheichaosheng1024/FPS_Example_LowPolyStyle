@@ -1,6 +1,9 @@
 #include "UI/FPSHUDWidget.h"
 #include "UI/FPSCrosshairWidget.h"
+#include "UI/FPSHitMarkerWidget.h"
+#include "UI/FPSKillIndicatorWidget.h"
 #include "UI/FPSSaveGame.h"
+#include "Kismet/GameplayStatics.h"
 
 UFPSHUDWidget::UFPSHUDWidget()
 {
@@ -24,6 +27,8 @@ void UFPSHUDWidget::NativeConstruct()
 			CrosshairWidget->AddToViewport(0);
 		}
 	}
+
+	// 命中提示和击杀指示器通过 BindWidget 绑定，蓝图 Designer 中放置
 
 	// 首次立即刷新
 	if (bAutoRefresh)
@@ -55,4 +60,28 @@ void UFPSHUDWidget::RefreshNow()
 {
 	TimeSinceLastRefresh = 0.f;
 	OnRefreshData();
+}
+
+void UFPSHUDWidget::ShowHitMarker()
+{
+	if (HitMarkerWidget)
+		HitMarkerWidget->ShowHitMarker();
+}
+
+void UFPSHUDWidget::ShowKillIndicator()
+{
+	if (KillIndicatorWidget)
+		KillIndicatorWidget->AddKillIcon();
+}
+
+void UFPSHUDWidget::PlayHitConfirmSound(USoundBase* Sound)
+{
+	if (Sound)
+		UGameplayStatics::PlaySound2D(this, Sound);
+}
+
+void UFPSHUDWidget::PlayKillConfirmSound(USoundBase* Sound)
+{
+	if (Sound)
+		UGameplayStatics::PlaySound2D(this, Sound);
 }

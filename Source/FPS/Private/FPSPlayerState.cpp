@@ -18,6 +18,9 @@ void AFPSPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 
 	DOREPLIFETIME(AFPSPlayerState, Kills);
 	DOREPLIFETIME(AFPSPlayerState, Deaths);
+	DOREPLIFETIME(AFPSPlayerState, RemainingTime);
+	DOREPLIFETIME(AFPSPlayerState, GameStartTime);
+	DOREPLIFETIME(AFPSPlayerState, GameDuration);
 	// Score 继承自 APlayerState，基类已处理 Replicated
 }
 
