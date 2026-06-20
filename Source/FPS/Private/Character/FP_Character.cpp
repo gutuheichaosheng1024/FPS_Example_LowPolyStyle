@@ -32,6 +32,9 @@ AFP_Character::AFP_Character()
     {
         ThirdPersonMesh->SetOwnerNoSee(true);
     }
+
+    // 分配唯一 TeamId（在构造函数中设置，确保 OnPossess 之前已绑定）
+    TeamId = FGenericTeamId(AFPS_CharacterBase::GetNextTeamId());
 }
 
 void AFP_Character::BeginPlay()

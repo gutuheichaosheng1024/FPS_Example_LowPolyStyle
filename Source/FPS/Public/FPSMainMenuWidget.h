@@ -104,6 +104,9 @@ private:
 	int32 RetryCount = 0;
 	FTimerHandle SearchTimerHandle;
 
+	/** RoomList 索引 → SessionSearch->SearchResults 索引的映射 */
+	TArray<int32> ResultToSearchIndex;
+
 	UPROPERTY()
 	UFPSGameInstance* CachedGameInstance = nullptr;
 

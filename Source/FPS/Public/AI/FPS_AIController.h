@@ -31,6 +31,10 @@ public:
     static const FName BBKey_InFireRange;
     static const FName BBKey_ShouldEngage;
 
+    /** AI 死亡后重生延迟（秒），可在蓝图/编辑器中按 AI Controller 实例配置 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Respawn", meta = (ClampMin = "0.5", ClampMax = "60.0"))
+    float RespawnTime = 5.f;
+
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Perception")
     TObjectPtr<UAISenseConfig_Sight> SightConfig;

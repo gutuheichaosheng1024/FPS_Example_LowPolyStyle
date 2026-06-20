@@ -9,6 +9,8 @@
 
 AFPS_AICharacter::AFPS_AICharacter()
 {
+    // 分配唯一 TeamId（在构造函数中设置，确保 OnPossess 之前已绑定）
+    TeamId = FGenericTeamId(AFPS_CharacterBase::GetNextTeamId());
 }
 
 void AFPS_AICharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

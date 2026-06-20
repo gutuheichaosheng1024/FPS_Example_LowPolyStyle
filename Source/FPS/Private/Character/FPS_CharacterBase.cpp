@@ -5,6 +5,14 @@
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
 
+// 静态计数器：为每个角色分配唯一 TeamId（从 0 开始）
+static uint8 GNextTeamId = 0;
+
+uint8 AFPS_CharacterBase::GetNextTeamId()
+{
+    return GNextTeamId++;
+}
+
 AFPS_CharacterBase::AFPS_CharacterBase()
 {
     bReplicates = true;

@@ -116,6 +116,7 @@ void UFPSMainMenuWidget::RefreshRoomList()
 	// 清空旧条目
 	RoomListContainer->ClearChildren();
 	RoomEntries.Empty();
+	ResultToSearchIndex.Empty();
 	SelectedRoomIndex = -1;
 
 	if (JoinButton)
@@ -140,7 +141,7 @@ void UFPSMainMenuWidget::RefreshRoomList()
 			continue;
 		}
 
-		// 设置数据
+		// 设置数据（i 是 RoomList 的 UI 索引，ResultIndex 是 SearchResults 的原始索引）
 		Entry->SetRoomData(
 			i,
 			RoomList[i].ServerName,
@@ -149,6 +150,9 @@ void UFPSMainMenuWidget::RefreshRoomList()
 			RoomList[i].MaxPlayers,
 			RoomList[i].PingInMs
 		);
+
+		// 记录 UI 索引到 SearchResults 索引的映射
+		ResultToSearchIndex.Add(RoomList[i].ResultIndex);
 
 		// 绑定点击事件
 		Entry->OnRoomEntryClicked.AddDynamic(this, &UFPSMainMenuWidget::OnRoomEntryClicked);
@@ -210,7 +214,15 @@ void UFPSMainMenuWidget::OnJoinButtonClicked()
 		return;
 	}
 
-	CachedGameInstance->JoinRoom(SelectedRoomIndex);
+	// 通过映射表获取 SearchResults 中的真实索引
+	if (!ResultToSearchIndex.IsValidIndex(SelectedRoomIndex))
+	{
+		SetStatusText(TEXT("房间索引无效"));
+		return;
+	}
+
+	const int32 SearchResultIndex = ResultToSearchIndex[SelectedRoomIndex];
+	CachedGameInstance->JoinRoom(SearchResultIndex);
 	SetStatusText(TEXT("正在加入房间..."));
 
 	if (JoinButton)

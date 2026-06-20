@@ -177,7 +177,7 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> RightBar;
 
-	// ---- 圆形控件 ----
+	// ---- 圆形控件（蓝图中设置圆形纹理） ----
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> CircleRing;
 

@@ -37,7 +37,7 @@ protected:
 
     /** 地图扫描目录（Content 相对路径，如 "/Game/MyAsset/Maps"） */
     UPROPERTY(EditDefaultsOnly, Category = "Maps")
-    FString MapScanPath = TEXT("/Game/MyAsset");
+    FString MapScanPath = TEXT("/Game/MyAsset/Maps");
 
     /** 扫描子目录 */
     UPROPERTY(EditDefaultsOnly, Category = "Maps")
@@ -47,9 +47,9 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Maps")
     TArray<FString> ExcludeKeywords;
 
-    /** 默认地图名（列表为空时的回退） */
+    /** 默认地图完整路径（列表为空时的回退） */
     UPROPERTY(EditDefaultsOnly, Category = "Maps")
-    FString DefaultMapName = TEXT("Lvl_Shooter");
+    FString DefaultMapName = TEXT("/Game/MyAsset/Maps/Lvl_Shooter");
 
     virtual void NativeConstruct() override;
 
@@ -57,8 +57,11 @@ private:
     /** 扫描目录下的所有 World 资产并填充下拉框 */
     void ScanAndPopulateMaps();
 
-    /** 从资产路径提取短地图名（如 "/Game/MyAsset/Lvl_Shooter" → "Lvl_Shooter"） */
+    /** 从资产路径提取短地图名（如 "/Game/MyAsset/Maps/Lvl_Shooter" → "Lvl_Shooter"） */
     FString ExtractMapName(const FString& AssetPath) const;
+
+    /** 地图完整路径列表（与 ComboBox 选项索引一一对应） */
+    TArray<FString> MapFullPathList;
 
     /** 检查地图名是否应被排除 */
     bool ShouldExclude(const FString& MapName) const;

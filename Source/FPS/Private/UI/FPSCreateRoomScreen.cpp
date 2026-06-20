@@ -29,6 +29,7 @@ void UFPSCreateRoomScreen::ScanAndPopulateMaps()
     if (!MapComboBox) return;
 
     MapComboBox->ClearOptions();
+    MapFullPathList.Empty();
 
     // 使用 Asset Registry 扫描 World 资产
     FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
@@ -54,36 +55,46 @@ void UFPSCreateRoomScreen::ScanAndPopulateMaps()
     }
 
     // 过滤出 World 资产
-    TArray<FString> MapNames;
+    TArray<FString> MapPaths;
+    TArray<FString> MapDisplayNames;
     for (const FAssetData& AssetData : AssetDataList)
     {
         if (AssetData.AssetClassPath.GetAssetName() == TEXT("World"))
         {
-            FString MapName = ExtractMapName(AssetData.GetSoftObjectPath().ToString());
-            if (!MapName.IsEmpty() && !ShouldExclude(MapName))
+            FString FullPath = AssetData.GetSoftObjectPath().ToString();
+            FString DisplayName = ExtractMapName(FullPath);
+            if (!DisplayName.IsEmpty() && !ShouldExclude(DisplayName))
             {
-                MapNames.Add(MapName);
+                MapPaths.Add(FullPath);
+                MapDisplayNames.Add(DisplayName);
             }
         }
     }
 
-    // 按字母顺序排序
-    MapNames.Sort();
+    // 按显示名排序（保持路径与显示名同步）
+    TArray<int32> Indices;
+    for (int32 i = 0; i < MapDisplayNames.Num(); i++) Indices.Add(i);
+    Indices.Sort([&MapDisplayNames](int32 A, int32 B) {
+        return MapDisplayNames[A] < MapDisplayNames[B];
+    });
 
-    // 填充下拉框
-    if (MapNames.Num() > 0)
+    // 填充下拉框：显示短名，完整路径存入 MapFullPathList
+    if (Indices.Num() > 0)
     {
-        for (const FString& Map : MapNames)
+        for (int32 Idx : Indices)
         {
-            MapComboBox->AddOption(Map);
+            MapFullPathList.Add(MapPaths[Idx]);
+            MapComboBox->AddOption(MapDisplayNames[Idx]);
         }
-        MapComboBox->SetSelectedOption(MapNames[0]);
+        MapComboBox->SetSelectedOption(MapDisplayNames[Indices[0]]);
     }
     else if (!DefaultMapName.IsEmpty())
     {
         // 回退到默认地图
-        MapComboBox->AddOption(DefaultMapName);
-        MapComboBox->SetSelectedOption(DefaultMapName);
+        FString DefaultDisplayName = ExtractMapName(DefaultMapName);
+        MapFullPathList.Add(DefaultMapName);
+        MapComboBox->AddOption(DefaultDisplayName);
+        MapComboBox->SetSelectedOption(DefaultDisplayName);
     }
 }
 
@@ -115,13 +126,21 @@ void UFPSCreateRoomScreen::OnCreateClicked()
     FString RoomName = RoomNameInput ? RoomNameInput->GetText().ToString() : TEXT("我的房间");
     if (RoomName.IsEmpty()) RoomName = TEXT("我的房间");
 
-    FString MapName = MapComboBox ? MapComboBox->GetSelectedOption() : DefaultMapName;
-    if (MapName.IsEmpty()) MapName = DefaultMapName;
+    // 通过 ComboBox 选中索引查找完整资产路径
+    FString MapFullPath = DefaultMapName;
+    if (MapComboBox)
+    {
+        int32 SelectedIndex = MapComboBox->GetSelectedIndex();
+        if (MapFullPathList.IsValidIndex(SelectedIndex))
+        {
+            MapFullPath = MapFullPathList[SelectedIndex];
+        }
+    }
 
     UFPSGameInstance* GI = Cast<UFPSGameInstance>(GetGameInstance());
     if (GI)
     {
-        GI->CreateRoomWithMap(RoomName, MapName);
+        GI->CreateRoomWithMap(RoomName, MapFullPath);
     }
 }
 

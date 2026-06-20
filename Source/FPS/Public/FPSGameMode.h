@@ -5,6 +5,8 @@
 #include "FPSGameMode.generated.h"
 
 class AFPS_CharacterBase;
+class AFPS_AICharacter;
+class AFPS_AIController;
 class AFPSPlayerState;
 
 /** 计分板条目（服务器内存） */
@@ -53,6 +55,10 @@ public:
 
 	virtual void RestartPlayer(AController* NewPlayer) override;
 	virtual void OnPostLogin(AController* NewPlayer) override;
+	virtual void Logout(AController* Exiting) override;
+
+	/** 随机选择 PlayerStart（覆盖默认选择逻辑） */
+	virtual AActor* FindPlayerStart_Implementation(AController* Player, const FString& IncomingName = TEXT("")) override;
 
 	// ---------- 计分 ----------
 
@@ -86,13 +92,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
 	TArray<FString> AINames;
 
-	/** AI 死亡后重生延迟（秒） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
-	float AIRespawnDelay = 5.f;
+	// ---------- AI 自动填充 ----------
 
-	/** 玩家死亡后角色销毁延迟（秒，给布娃娃保留时间） */
+	/** 是否启用 AI 自动填充（当玩家不足时用 AI 补齐到房间最大人数） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|AutoFill")
+	bool bAutoFillWithAI = false;
+
+	/** AI 角色类（蓝图中设置为 AFPS_AICharacter 的子类） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|AutoFill",
+		meta = (EditCondition = "bAutoFillWithAI"))
+	TSubclassOf<AFPS_AICharacter> AIFillCharacterClass;
+
+	/** AI 控制器类（蓝图中设置为 AFPS_AIController 的子类） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|AutoFill",
+		meta = (EditCondition = "bAutoFillWithAI"))
+	TSubclassOf<AFPS_AIController> AIFillControllerClass;
+
+	/** 角色死亡后销毁延迟（秒，给布娃娃保留时间） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Respawn")
-	float PlayerRespawnDelay = 3.f;
+	float DestroyDelay = 3.f;
 
 	// ---------- 运行时状态 ----------
 
@@ -122,14 +140,37 @@ protected:
 	/** 游戏结束：排序计分板+推送Client_GameEnd */
 	void EndGame();
 
-	/** 调度AI延迟重生 */
-	void ScheduleAIRespawn(AController* AICon);
+	/** 调度AI延迟重生（延迟时间从 AIController 读取） */
+	void ScheduleAIRespawn(AController* AICon, float Delay);
 
 	/** 执行AI重生 */
 	void RespawnAI(AController* AICon);
 
 	/** 绑定新角色的死亡委托 */
 	void BindCharacterDelegates(APawn* Pawn);
+
+	// ---------- AI 自动填充内部方法 ----------
+
+	/** 从 Session 读取最大玩家数 */
+	void ReadMaxPlayersFromSession();
+
+	/** 获取当前真实玩家数量（不含 AI） */
+	int32 GetRealPlayerCount() const;
+
+	/** 获取当前自动填充 AI 数量 */
+	int32 GetAutoFillAICount() const;
+
+	/** 补充 AI 到房间最大人数 */
+	void FillAIIfNeeded();
+
+	/** 移除指定数量的 AI（优先移除最近死亡的） */
+	void RemoveAI(int32 Count);
+
+	/** 生成一个自动填充 AI */
+	AFPS_AIController* SpawnOneAI();
+
+	/** 销毁一个 AI 控制器及其 Pawn */
+	void DestroyOneAI(AFPS_AIController* AICon);
 
 	/** 从控制器获取玩家名 */
 	FString GetControllerPlayerName(AController* Ctrl) const;
@@ -157,4 +198,15 @@ protected:
 
 	/** 重生定时器（按Controller） */
 	TMap<AController*, FTimerHandle> RespawnTimers;
+
+	// ---------- AI 自动填充运行时状态 ----------
+
+	/** 服务器记录的最大玩家数（从 Session 读取） */
+	int32 CachedMaxPlayers = 4;
+
+	/** 已生成的自动填充 AI 控制器列表 */
+	TArray<TObjectPtr<AFPS_AIController>> AutoFillAIControllers;
+
+	/** 最近死亡的 AI 控制器（用于优先移除） */
+	TArray<TObjectPtr<AFPS_AIController>> RecentlyDeadAIControllers;
 };

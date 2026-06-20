@@ -176,6 +176,9 @@ public:
 public:
     AFPS_CharacterBase();
     virtual void BeginPlay() override;
+
+    /** 获取下一个唯一 TeamId（每次调用自增，确保每个角色 ID 不同） */
+    static uint8 GetNextTeamId();
     virtual void Tick(float DeltaTime) override;
     virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
         AController* EventInstigator, AActor* DamageCauser) override;

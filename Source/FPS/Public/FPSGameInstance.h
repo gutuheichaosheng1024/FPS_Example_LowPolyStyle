@@ -95,6 +95,7 @@ private:
 	// ---------- 内部状态 ----------
 	void BindSessionDelegates();
 	void ExecuteCreateSession(const FString& ServerName);
+	void ExecuteFindRooms();
 	void ReadSearchResults();
 
 	IOnlineSessionPtr SessionInterface;
@@ -109,6 +110,12 @@ private:
 
 	// UI ZOrder 计数器
 	int32 UIZOrderCounter = 0;
+
+	// 防止 Session 操作重入（Destroy 异步期间阻止新的 Create）
+	bool bSessionOperationPending = false;
+
+	// DestroySession 完成后是否需要执行搜索
+	bool bPendingFindRooms = false;
 
 	// 委托句柄
 	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;

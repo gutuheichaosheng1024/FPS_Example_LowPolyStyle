@@ -51,11 +51,20 @@ void UFPSGameInstance::BindSessionDelegates()
 
 void UFPSGameInstance::CreateRoom(const FString& ServerName)
 {
-	CurrentMapName = TEXT("Lvl_Shooter");
+	CurrentMapName = TEXT("/Game/MyAsset/Maps/Lvl_Shooter");
 
 	if (!SessionInterface.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("CreateRoom: SessionInterface invalid"));
+		return;
+	}
+
+	// 如果有异步操作正在进行，记录待处理请求
+	if (bSessionOperationPending)
+	{
+		PendingServerName = ServerName;
+		PendingMapName = CurrentMapName;
+		UE_LOG(LogTemp, Warning, TEXT("CreateRoom: Session operation pending, queued"));
 		return;
 	}
 
@@ -64,6 +73,7 @@ void UFPSGameInstance::CreateRoom(const FString& ServerName)
 	{
 		PendingServerName = ServerName;
 		PendingMapName = CurrentMapName;
+		bSessionOperationPending = true;
 		SessionInterface->DestroySession(NAME_GameSession);
 		return;
 	}
@@ -83,11 +93,21 @@ void UFPSGameInstance::CreateRoomWithMap(const FString& ServerName, const FStrin
 		return;
 	}
 
+	// 如果有异步操作正在进行，记录待处理请求（覆盖旧的）
+	if (bSessionOperationPending)
+	{
+		PendingServerName = ServerName;
+		PendingMapName = MapName;
+		UE_LOG(LogTemp, Warning, TEXT("CreateRoomWithMap: Session operation pending, queued"));
+		return;
+	}
+
 	// 如果已有 Session，先销毁
 	if (SessionInterface->GetNamedSession(NAME_GameSession))
 	{
 		PendingServerName = ServerName;
 		PendingMapName = MapName;
+		bSessionOperationPending = true;
 		SessionInterface->DestroySession(NAME_GameSession);
 		return;
 	}
@@ -109,9 +129,12 @@ void UFPSGameInstance::ExecuteCreateSession(const FString& ServerName)
 	Settings.Set(FName("SERVERNAME"), ServerName,
 		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
+	bSessionOperationPending = true;
+
 	if (!SessionInterface->CreateSession(0, NAME_GameSession, Settings))
 	{
 		UE_LOG(LogTemp, Error, TEXT("CreateSession: Failed to start async task"));
+		bSessionOperationPending = false;
 	}
 }
 
@@ -120,13 +143,14 @@ void UFPSGameInstance::OnCreateSessionComplete(FName SessionName, bool bSuccess)
 	UE_LOG(LogTemp, Log, TEXT("OnCreateSessionComplete: %s, Success=%d"),
 		*SessionName.ToString(), bSuccess);
 
+	bSessionOperationPending = false;
+
 	if (bSuccess)
 	{
 		OnCreateRoomSuccess.Broadcast();
 
-		// 使用 CurrentMapName 构建地图路径
-		FString MapPath = FString::Printf(TEXT("/Game/MyAsset/%s"), *CurrentMapName);
-		UGameplayStatics::OpenLevel(this, FName(*MapPath), true, TEXT("listen"));
+		// CurrentMapName 已是完整资产路径（如 "/Game/MyAsset/Maps/Lvl_Shooter"）
+		UGameplayStatics::OpenLevel(this, FName(*CurrentMapName), true, TEXT("listen"));
 	}
 }
 
@@ -149,12 +173,37 @@ void UFPSGameInstance::FindRooms()
 		return;
 	}
 
-	// 确保没有残留的搜索状态
-	if (SessionSearch.IsValid() &&
-		SessionSearch->SearchState == EOnlineAsyncTaskState::Failed)
+	// 清理客户端可能残留的 session（避免搜索到自己）
+	// DestroySession 是异步的，必须等它完成后再搜索
+	if (!bSessionOperationPending)
 	{
-		SessionSearch.Reset();
+		if (SessionInterface->GetNamedSession(NAME_GameSession))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FindRooms: Destroying stale session before search, deferring search"));
+			PendingServerName.Empty();
+			PendingMapName.Empty();
+			bSessionOperationPending = true;
+			SessionInterface->DestroySession(NAME_GameSession);
+			// 标记为需要在 DestroySession 完成后执行搜索
+			bPendingFindRooms = true;
+			return;
+		}
 	}
+	else if (bSessionOperationPending)
+	{
+		// 有其他操作正在进行，标记为等待 DestroySession 完成后搜索
+		bPendingFindRooms = true;
+		UE_LOG(LogTemp, Warning, TEXT("FindRooms: Operation pending, will search after destroy completes"));
+		return;
+	}
+
+	ExecuteFindRooms();
+}
+
+void UFPSGameInstance::ExecuteFindRooms()
+{
+	// 重置搜索状态
+	SessionSearch.Reset();
 
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	SessionSearch->bIsLanQuery = true;
@@ -202,9 +251,12 @@ void UFPSGameInstance::ReadSearchResults()
 		Info.PingInMs = Result.PingInMs;
 		Info.ResultIndex = i;
 
+		// 过滤掉没有 SERVERNAME 的无效 Session（引擎内部 phantom session）
 		if (Info.ServerName.IsEmpty())
 		{
-			Info.ServerName = FString::Printf(TEXT("Server %d"), i + 1);
+			UE_LOG(LogTemp, Log, TEXT("  Room[%d]: Skipped (no SERVERNAME) | Map=%s | Ping=%dms"),
+				i, *Info.MapName, Info.PingInMs);
+			continue;
 		}
 
 		RoomList.Add(Info);
@@ -274,6 +326,17 @@ void UFPSGameInstance::OnDestroySessionComplete(FName SessionName, bool bSuccess
 	UE_LOG(LogTemp, Log, TEXT("OnDestroySessionComplete: %s, Success=%d"),
 		*SessionName.ToString(), bSuccess);
 
+	bSessionOperationPending = false;
+
+	// 如果有延迟的搜索请求（优先于创建请求）
+	if (bPendingFindRooms)
+	{
+		bPendingFindRooms = false;
+		UE_LOG(LogTemp, Log, TEXT("OnDestroySessionComplete: Executing deferred FindRooms"));
+		ExecuteFindRooms();
+		return;
+	}
+
 	// 如果有延迟的创建请求
 	if (bSuccess && !PendingServerName.IsEmpty())
 	{
@@ -289,6 +352,12 @@ void UFPSGameInstance::OnDestroySessionComplete(FName SessionName, bool bSuccess
 
 void UFPSGameInstance::ReturnToMainMenu()
 {
+	// 清除所有待处理的 Session 操作
+	PendingServerName.Empty();
+	PendingMapName.Empty();
+	bSessionOperationPending = false;
+	bPendingFindRooms = false;
+
 	DestroyCurrentSession();
 
 	// 加载主菜单地图
