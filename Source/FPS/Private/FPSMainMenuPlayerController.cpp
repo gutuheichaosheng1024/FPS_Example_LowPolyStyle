@@ -5,6 +5,8 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 
+// BeginPlay：初始化主菜单 UI，应用保存的显示设置并创建标题界面
+// 流程：调用 Super → 检查 IsLocalController → ApplySavedDisplaySettings → 创建 TitleScreen 并 AddToViewport → 设置 UIOnly 输入模式
 void AFPSMainMenuPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -15,7 +17,6 @@ void AFPSMainMenuPlayerController::BeginPlay()
 
 	if (!IsLocalController()) return;
 
-	// 应用保存的显示设置
 	ApplySavedDisplaySettings();
 
 	if (TitleScreenClass)
@@ -42,6 +43,8 @@ void AFPSMainMenuPlayerController::BeginPlay()
 	}
 }
 
+// ApplySavedDisplaySettings：从存档读取分辨率/全屏设置并应用到 GameUserSettings
+// 流程：LoadSettings → 获取 GameUserSettings → 解析 Resolution 字符串 → SetScreenResolution → SetFullscreenMode → ApplySettings
 void AFPSMainMenuPlayerController::ApplySavedDisplaySettings()
 {
 	UFPSSaveGame* Settings = UFPSSaveGame::LoadSettings();
@@ -50,7 +53,6 @@ void AFPSMainMenuPlayerController::ApplySavedDisplaySettings()
 	UGameUserSettings* GameSettings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
 	if (!GameSettings) return;
 
-	// 解析分辨率
 	int32 Width = 0, Height = 0;
 	FString Left, Right;
 	if (Settings->Resolution.Split(TEXT("x"), &Left, &Right))
@@ -63,10 +65,8 @@ void AFPSMainMenuPlayerController::ApplySavedDisplaySettings()
 	{
 		const FIntPoint DesiredResolution(Width, Height);
 
-		// 设置分辨率
 		GameSettings->SetScreenResolution(DesiredResolution);
 
-		// 设置窗口模式
 		if (Settings->bFullscreen)
 		{
 			GameSettings->SetFullscreenMode(EWindowMode::Fullscreen);
@@ -76,7 +76,6 @@ void AFPSMainMenuPlayerController::ApplySavedDisplaySettings()
 			GameSettings->SetFullscreenMode(EWindowMode::Windowed);
 		}
 
-		// 应用设置
 		GameSettings->ApplySettings(false);
 
 		UE_LOG(LogTemp, Log, TEXT("MainMenuPC: Applied display settings - %dx%d, Fullscreen=%d"),
@@ -84,6 +83,8 @@ void AFPSMainMenuPlayerController::ApplySavedDisplaySettings()
 	}
 }
 
+// EndPlay：离开主菜单时重置输入模式为 GameOnly
+// 流程：检查 IsLocalController → 设置 GameOnly 输入模式 → 隐藏鼠标 → 调用 Super::EndPlay
 void AFPSMainMenuPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (IsLocalController())

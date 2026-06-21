@@ -7,6 +7,12 @@
 
 class UAIAttackConfig;
 
+/**
+ * AFPS_AICharacter — AI-controlled enemy character driven by behavior tree
+ *
+ * 职责：行为树驱动的射击/换弹/瞄准接口、瞄准方向插值旋转、队伍标识与敌我判断、死亡时停止行为树与布娃娃表现
+ * 使用：AWeaponActor, UAIAttackConfig, AAIController, AFPS_CharacterBase
+ */
 UCLASS(config = Game)
 class FPS_API AFPS_AICharacter : public AFPS_CharacterBase, public IGenericTeamAgentInterface
 {
@@ -18,15 +24,12 @@ public:
     virtual void Tick(float DeltaTime) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    // --- IGenericTeamAgentInterface ---
     virtual FGenericTeamId GetGenericTeamId() const override { return TeamId; }
     virtual void SetGenericTeamId(const FGenericTeamId& NewTeamId) override { TeamId = NewTeamId; }
 
-    // --- 多态接口覆盖 ---
     virtual FVector GetShootLocation() const override;
     virtual FRotator GetShootRotation() const override;
 
-    // --- AI 专用接口 ---
     UFUNCTION(BlueprintCallable, Category = "AI|Combat")
     void FireAtTarget(AActor* Target);
 
@@ -42,15 +45,12 @@ public:
     virtual void HandleDeath() override;
     virtual void Multicast_OnDeath_Implementation() override;
 
-    /** 瞄准目标位置 */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category = "AI|Combat")
     FVector AimTargetLocation;
 
-    /** 当前攻击目标 */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Combat")
     TWeakObjectPtr<AActor> CurrentTarget;
 
-    /** AI 攻击配置（命中概率/骨骼选择/距离阈值），BT 节点通过此访问 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Combat")
     TObjectPtr<UAIAttackConfig> AttackConfig;
 
@@ -60,7 +60,6 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
     FGenericTeamId TeamId;
 
-    /** 射击起点的骨骼/插槽名，留空则用 ActorLocation */
     UPROPERTY(EditAnywhere, Category = "AI|Combat")
     FName ShootBoneName = NAME_None;
 

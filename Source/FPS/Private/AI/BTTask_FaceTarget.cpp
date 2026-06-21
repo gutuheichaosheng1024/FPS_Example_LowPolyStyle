@@ -10,6 +10,8 @@ UBTTask_FaceTarget::UBTTask_FaceTarget()
     bNotifyTick = true;
 }
 
+// 开始面向目标：验证AI角色和目标 → 设置AimTargetLocation → 进入InProgress持续Tick
+// 流程：获取AICharacter和BB → 从黑板读取TargetActor → 设置AimTargetLocation为目标位置 → 返回InProgress
 EBTNodeResult::Type UBTTask_FaceTarget::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());
@@ -23,6 +25,8 @@ EBTNodeResult::Type UBTTask_FaceTarget::ExecuteTask(UBehaviorTreeComponent& Owne
     return EBTNodeResult::InProgress;
 }
 
+// 每Tick更新面向：持续更新目标位置 → 计算水平夹角 → 角度达标则完成
+// 流程：验证AIChar/BB/Target → 更新AimTargetLocation → 计算DirToTarget与AIDir的水平夹角 → 若角度≤AcceptableAngle则Succeeded
 void UBTTask_FaceTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());
@@ -32,10 +36,8 @@ void UBTTask_FaceTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Node
     AActor* Target = Cast<AActor>(BB->GetValueAsObject(AFPS_AIController::BBKey_TargetActor));
     if (!Target) { FinishLatentTask(OwnerComp, EBTNodeResult::Failed); return; }
 
-    // 持续更新目标位置（目标可能移动）
     AIChar->AimTargetLocation = Target->GetActorLocation();
 
-    // 计算水平夹角
     const FVector DirToTarget = (Target->GetActorLocation() - AIChar->GetActorLocation()).GetSafeNormal2D();
     const FVector AIDir = AIChar->GetActorForwardVector().GetSafeNormal2D();
     const float Dot = FVector::DotProduct(AIDir, DirToTarget);

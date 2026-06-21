@@ -7,10 +7,6 @@
 class UImage;
 class UOverlay;
 
-// ======================================================================
-// 形状枚举
-// ======================================================================
-
 UENUM(BlueprintType)
 enum class ECrosshairShape : uint8
 {
@@ -19,20 +15,14 @@ enum class ECrosshairShape : uint8
 	FourCorner  UMETA(DisplayName = "四角"),
 };
 
-// ======================================================================
-// 准星完整配置
-// ======================================================================
-
 USTRUCT(BlueprintType)
 struct FPS_API FCrosshairConfig
 {
 	GENERATED_BODY()
 
-	// ---- 形状 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shape")
 	ECrosshairShape Shape = ECrosshairShape::FourCorner;
 
-	// ---- 中心点 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CenterDot")
 	bool bShowCenterDot = true;
 
@@ -44,7 +34,6 @@ struct FPS_API FCrosshairConfig
 		meta = (EditCondition = "bShowCenterDot"))
 	FLinearColor CenterDotColor = FLinearColor::White;
 
-	// ---- 圆形参数 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle",
 		meta = (EditCondition = "Shape == ECrosshairShape::Circle", ClampMin = "4.0", ClampMax = "100.0"))
 	float CircleRadius = 14.0f;
@@ -57,7 +46,6 @@ struct FPS_API FCrosshairConfig
 		meta = (EditCondition = "Shape == ECrosshairShape::Circle"))
 	bool bCircleFilled = false;
 
-	// ---- 四角参数 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FourCorner",
 		meta = (EditCondition = "Shape == ECrosshairShape::FourCorner", ClampMin = "1.0", ClampMax = "80.0"))
 	float BarLength = 14.0f;
@@ -70,16 +58,13 @@ struct FPS_API FCrosshairConfig
 		meta = (EditCondition = "Shape == ECrosshairShape::FourCorner", ClampMin = "0.0", ClampMax = "80.0"))
 	float BarGap = 6.0f;
 
-	// ---- 颜色 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Color")
 	FLinearColor CrosshairColor = FLinearColor(0.0f, 1.0f, 0.0f, 0.9f);
 
-	// ---- 整体缩放 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transform",
 		meta = (ClampMin = "0.25", ClampMax = "4.0"))
 	float OverallScale = 1.0f;
 
-	// ---- 动态扩散响应 ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic")
 	bool bRespondToSpread = false;
 
@@ -88,20 +73,11 @@ struct FPS_API FCrosshairConfig
 	float SpreadRadiusScale = 1.0f;
 };
 
-// ======================================================================
-// 准星控件（C++ 逻辑 + BindWidget 操作控件）
-// ======================================================================
-
 /**
- * 准星控件基类
- * C++ 负责：数据、状态、计算、通过 BindWidget 更新控件
- * 蓝图负责：放置控件、命名、设置纹理
+ * UFPSCrosshairWidget — 准星控件，支持四角/圆形/无三种形状，具备动态扩散响应和完整的参数配置
  *
- * 蓝图子类需要：
- *   1. 在 Designer 中放置 Overlay 和 Image 控件
- *   2. 按照下方 BindWidget 命名
- *   3. 设置 Image 纹理
- *   4. 不需要写任何蓝图代码
+ * 职责：管理准星的形状切换、参数更新和动态扩散；通过 BindWidget 操作蓝图 Designer 中放置的 Image 控件；提供 ApplyConfig/SetSpreadAngle/快捷设置等数据接口
+ * 使用：UUserWidget、UImage、UOverlay、FCrosshairConfig
  */
 UCLASS(Abstract, BlueprintType)
 class FPS_API UFPSCrosshairWidget : public UUserWidget
@@ -109,31 +85,17 @@ class FPS_API UFPSCrosshairWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// ======================================================================
-	// 数据接口
-	// ======================================================================
-
-	/** 应用完整配置 */
 	UFUNCTION(BlueprintCallable, Category = "Crosshair")
 	void ApplyConfig(const FCrosshairConfig& InConfig);
 
-	/** 设置当前扩散角度 */
 	UFUNCTION(BlueprintCallable, Category = "Crosshair")
 	void SetSpreadAngle(float Angle);
-
-	// ======================================================================
-	// 状态查询
-	// ======================================================================
 
 	UFUNCTION(BlueprintPure, Category = "Crosshair")
 	const FCrosshairConfig& GetConfig() const { return Config; }
 
 	UFUNCTION(BlueprintPure, Category = "Crosshair")
 	float GetCurrentSpreadAngle() const { return CurrentSpreadAngle; }
-
-	// ======================================================================
-	// 快捷设置
-	// ======================================================================
 
 	UFUNCTION(BlueprintCallable, Category = "Crosshair|Set")
 	void SetShape(ECrosshairShape Shape);
@@ -156,15 +118,9 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 
-	// ======================================================================
-	// BindWidget — 蓝图中必须存在同名控件
-	// ======================================================================
-
-	// ---- 根容器 ----
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UOverlay> CrosshairOverlay;
 
-	// ---- 四角控件 ----
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> TopBar;
 
@@ -177,34 +133,21 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> RightBar;
 
-	// ---- 圆形控件（蓝图中设置圆形纹理） ----
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> CircleRing;
 
-	// ---- 中心点 ----
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> CenterDot;
 
 private:
-	/** 更新所有控件 */
 	void UpdateAllWidgets();
-
-	/** 更新四角控件 */
 	void UpdateFourCorner();
-
-	/** 更新圆形控件 */
 	void UpdateCircle();
-
-	/** 更新中心点 */
 	void UpdateCenterDot();
-
-	/** 更新形状可见性 */
 	void UpdateShapeVisibility();
 
-	// 当前配置
 	UPROPERTY()
 	FCrosshairConfig Config;
 
-	// 当前扩散角度
 	float CurrentSpreadAngle = 0.f;
 };

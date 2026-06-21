@@ -9,6 +9,12 @@ class UAISenseConfig_Sight;
 class UAISenseConfig_Hearing;
 class UBehaviorTree;
 
+/**
+ * AFPS_AIController — AI controller with sight/hearing perception and Blackboard key management
+ *
+ * 职责：管理AI感知（视觉20m/听觉30m）、Blackboard键值定义、行为树运行、目标感知回调与重生逻辑
+ * 使用：AFPS_AICharacter, UAISenseConfig_Sight, UAISenseConfig_Hearing, UBehaviorTree, UBlackboardComponent
+ */
 UCLASS()
 class FPS_API AFPS_AIController : public AAIController
 {
@@ -31,7 +37,6 @@ public:
     static const FName BBKey_InFireRange;
     static const FName BBKey_ShouldEngage;
 
-    /** AI 死亡后重生延迟（秒），可在蓝图/编辑器中按 AI Controller 实例配置 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Respawn", meta = (ClampMin = "0.5", ClampMax = "60.0"))
     float RespawnTime = 5.f;
 

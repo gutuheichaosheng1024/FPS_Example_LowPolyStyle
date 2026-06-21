@@ -31,6 +31,15 @@ enum class EWeaponTargetSlot : uint8
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponReady);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHitConfirmed, bool, bKilled);
 
+/**
+ * AWeaponActor — 武器 Actor，管理武器的装备、射击、换弹、检视、丢弃全生命周期
+ *
+ * 职责：处理武器状态机（装备/激活/停用/丢弃）、射击系统（含扩散和后坐力）、弹药管理、动画/音效/VFX 播放、
+ *       网络复制（Server RPC 权威射击/换弹/检视，Multicast 广播表现）、EnhancedInput 绑定、拾取交互和掉落物理
+ * 使用：AFPS_CharacterBase（持有者角色）、UWeaponDataConfig（数据配置）、UWeaponAnimationConfig（动画配置）、
+ *       UWeaponAudioConfig（音频配置）、FWeaponRecoilHandler（后坐力）、FWeaponSpreadHandler（扩散）、
+ *       FWeaponMeshManager（网格管理）、UPickUpComponent（拾取组件）、UEnhancedInputComponent（输入绑定）
+ */
 UCLASS(BlueprintType)
 class FPS_API AWeaponActor : public AActor
 {
@@ -40,8 +49,6 @@ public:
     AWeaponActor();
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
-    /** Owner 复制到客户端时设置 OwningCharacter（解决客户端 OwningCharacter 为 null 的问题） */
     virtual void OnRep_Owner() override;
 
     bool Equip(AFPS_CharacterBase* TargetCharacter);
@@ -67,14 +74,12 @@ public:
     UWeaponAudioConfig* GetAudioConfig() const { return AudioConfig; }
     void NotifyOwnerOutOfAmmo();
 
-    /** 重置后坐力图案索引（换弹/切换武器时调用） */
     UFUNCTION(BlueprintCallable, Category = "Weapon|Recoil")
     void ResetRecoilPattern();
 
     UPROPERTY(BlueprintAssignable)
     FOnWeaponReady OnWeaponReady;
 
-    /** 命中确认委托（服务器端命中时广播，PlayerController 订阅） */
     UPROPERTY(BlueprintAssignable, Category = "Weapon|Combat")
     FOnHitConfirmed OnHitConfirmed;
 
@@ -85,7 +90,6 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void Tick(float DeltaTime) override;
 
-    // 功能函数
     void Unholster();
     void BindInput();
     void UnbindInput();
@@ -112,13 +116,11 @@ protected:
     void OnReloadMontageEnded(UAnimMontage* Montage, bool bInterrupted);
     void OnViewMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
-    // 装备/丢弃流程
     bool HandleEquip(AFPS_CharacterBase* TargetCharacter);
     void HandleActivateWeapon();
     void HandleDeactivateWeapon();
     void HandleDropWeapon();
 
-    // 射击核心
     void HandleStartFire();
     void HandleStopFire();
     void HandleAutoFire();
@@ -126,44 +128,36 @@ protected:
     bool PerformLineTrace(FHitResult& OutHit, FVector& OutShotDirection) const;
     void ApplyDamage(const FHitResult& Hit, const FVector& ShotDirection);
 
-    // 射击网络 RPC
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_RequestFire(FVector ShootLocation, FVector ShotDirection);
 
     UFUNCTION(NetMulticast, Unreliable)
     void Multicast_OnFire(FVector ImpactPoint, bool bHit);
 
-    // 换弹核心
     void HandleReloadRequest();
     void HandleReloadComplete();
 
-    // 换弹网络 RPC
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_RequestReload();
 
     UFUNCTION(NetMulticast, Reliable)
     void Multicast_OnReloadComplete();
 
-    // 检视网络 RPC
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_RequestView(bool bNewViewing);
 
-    // 网络复制回调
     UFUNCTION()
     void OnRep_CurrentAmmo();
 
-    // 拾取与物理
     void HandlePickupComponentPostEquip();
     void EnablePickupComponent(bool bEnable);
     void ApplyDroppedPhysicsState();
     void DropWeaponPhysically(const FVector& ViewLoc, const FRotator& ViewRot);
 
-    // 自动销毁
     void ScheduleAutoDestroy();
     void CancelAutoDestroy();
     void HandleAutoDestroyTimerExpired();
 
-    // 扩散（委托给 SpreadHandler）
     UFUNCTION(BlueprintCallable)
     float GetTotalSpreadAngle() const;
 
@@ -180,13 +174,11 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     UPickUpComponent* PickupComponent;
 
-    /** 武器数据配置（伤害/弹药/扩散/后坐力） */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
     TObjectPtr<UWeaponDataConfig> DataConfig;
 
 private:
 
-    // 武器属性
     UPROPERTY(EditDefaultsOnly)
     EWeaponTargetSlot TargetSlot = EWeaponTargetSlot::Primary;
 
@@ -202,7 +194,6 @@ public:
 
 private:
 
-    // 输入
     UPROPERTY(EditAnywhere, Category = "Input")
     UInputAction* FireAction;
     UPROPERTY(EditAnywhere, Category = "Input")
@@ -210,18 +201,15 @@ private:
     UPROPERTY(EditAnywhere, Category = "Input")
     UInputAction* ViewAction;
 
-    // 音频配置 DataAsset
     UPROPERTY(EditAnywhere, Category = "Audio")
     TObjectPtr<UWeaponAudioConfig> AudioConfig;
 
-    // 动画配置 DataAsset
     UPROPERTY(EditAnywhere, Category = "Animation")
     TObjectPtr<UWeaponAnimationConfig> AnimationConfig;
 
     UPROPERTY(EditAnywhere)
     FName AttachSocketName = TEXT("SOCKET_Weapon");
 
-    // 状态
     bool bIsEquipped = false;
     bool bIsActiveWeapon = false;
     AFPS_CharacterBase* OwningCharacter = nullptr;
@@ -238,7 +226,6 @@ private:
     bool bSkipNextSound = false;
     bool bFireInputHeld = false;
 
-    // 定时器
     FTimerHandle AutoFireTimerHandle;
     FTimerHandle ReloadTimerHandle;
     FTimerHandle PickupReactivateHandle;
@@ -255,12 +242,7 @@ private:
     UPROPERTY(EditDefaultsOnly)
     float UnpickedLifeSpan = 5.f;
 
-    // ---------- 后坐力 ----------
     FWeaponRecoilHandler RecoilHandler;
-
-    // ---------- 扩散 ----------
     FWeaponSpreadHandler SpreadHandler;
-
-    // ---------- 网格管理 ----------
     FWeaponMeshManager MeshManager;
 };

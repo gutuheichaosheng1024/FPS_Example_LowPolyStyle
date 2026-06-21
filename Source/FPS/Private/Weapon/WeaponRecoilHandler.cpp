@@ -20,6 +20,8 @@ void FWeaponRecoilHandler::ClearCharacter()
     Reset();
 }
 
+// 重置图案索引、未开火计数和后坐力速度
+// 流程：将 PatternIndex、ShotsSinceLastRecoil、VelocityPitch、VelocityYaw 全部归零
 void FWeaponRecoilHandler::Reset()
 {
     PatternIndex = 0;
@@ -28,14 +30,14 @@ void FWeaponRecoilHandler::Reset()
     VelocityYaw = 0.f;
 }
 
+// 开火时应用后坐力：从图案读取冲量，累加到速度变量
+// 流程：检查角色是否为玩家控制 → 解析图案来源（Custom/预设/无）→ 取当前索引的图案值 × 强度 → 累加 Pitch/Yaw 速度 → 递增图案索引 → 重置未开火计数
 void FWeaponRecoilHandler::ApplyRecoil(const UWeaponDataConfig* Config)
 {
     if (!Config || !Character) return;
 
-    // 仅玩家控制的角色应用图案后坐力
     if (!Character->IsPlayerControlled()) return;
 
-    // 解析图案来源
     const TArray<FVector2D>* Pattern = nullptr;
     int32 PatternNum = 0;
 
@@ -54,7 +56,6 @@ void FWeaponRecoilHandler::ApplyRecoil(const UWeaponDataConfig* Config)
     {
         const int32 Idx = FMath::Min(PatternIndex, PatternNum - 1);
         const FVector2D Impulse = (*Pattern)[Idx];
-        // 速度冲量 = 图案值 * 强度（Pitch 取反，图案定义为准星上移量）
         VelocityPitch += -Impulse.X * Config->RecoilIntensity;
         VelocityYaw   +=  Impulse.Y * Config->RecoilIntensity;
         PatternIndex = FMath::Min(PatternIndex + 1, PatternNum - 1);
@@ -63,11 +64,12 @@ void FWeaponRecoilHandler::ApplyRecoil(const UWeaponDataConfig* Config)
     ShotsSinceLastRecoil = 0;
 }
 
+// 每帧更新后坐力：速度衰减 + 应用相机输入 + 图案索引归零检测
+// 流程：检查速度是否为零 → 将速度×dt 应用到相机 → 按衰减率缩减速度 → 递增未开火计数 → 若超过重置延迟则将图案索引归零
 void FWeaponRecoilHandler::UpdateRecoil(float DeltaTime, const UWeaponDataConfig* Config)
 {
     if (!Config) return;
 
-    // 速度衰减模型：每帧应用 velocity*dt 到相机，然后 velocity *= (1 - decay*dt)
     if (FMath::Abs(VelocityPitch) > KINDA_SMALL_NUMBER ||
         FMath::Abs(VelocityYaw)   > KINDA_SMALL_NUMBER)
     {
@@ -78,7 +80,6 @@ void FWeaponRecoilHandler::UpdateRecoil(float DeltaTime, const UWeaponDataConfig
         VelocityYaw   *= (1.f - Drag);
     }
 
-    // 图案重置：连续 N 发未开火则归零
     if (ShotsSinceLastRecoil == 0)
         ShotsSinceLastRecoil = 1;
     else
@@ -90,6 +91,8 @@ void FWeaponRecoilHandler::UpdateRecoil(float DeltaTime, const UWeaponDataConfig
     }
 }
 
+// 将后坐力速度增量应用到玩家相机
+// 流程：获取 PlayerController → 调用 AddPitchInput/AddYawInput 驱动相机旋转
 void FWeaponRecoilHandler::ApplyRecoilToCamera(float PitchDelta, float YawDelta)
 {
     if (!Character) return;

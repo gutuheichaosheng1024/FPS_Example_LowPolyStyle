@@ -8,16 +8,16 @@
 #include "UI/FPSGameEndWidget.h"
 #include "Blueprint/UserWidget.h"
 
-// ======================================================================
-// Client RPC
-// ======================================================================
-
+// Client_ShowRespawnUI_Implementation：服务器推送重生 UI 到客户端
+// 流程：检查 IsLocalController → 调用 ShowRespawnUI 创建并显示重生界面
 void AFPSPlayerController::Client_ShowRespawnUI_Implementation(const FString& KillerName)
 {
 	if (!IsLocalController()) return;
 	ShowRespawnUI(KillerName);
 }
 
+// Client_GameEnd_Implementation：服务器推送游戏结束结算 UI 到客户端
+// 流程：检查 GameEndUIClass → CreateWidget → 尝试 Cast UFPSGameEndWidget 设置计分板数据 → AddToViewport → 切换 UIOnly 输入模式
 void AFPSPlayerController::Client_GameEnd_Implementation(
 	const FString& Top1Name, float Top1Score, int32 Top1Kills,
 	const FString& Top2Name, float Top2Score, int32 Top2Kills,
@@ -28,7 +28,6 @@ void AFPSPlayerController::Client_GameEnd_Implementation(
 	UUserWidget* GameEndUI = CreateWidget<UUserWidget>(this, GameEndUIClass);
 	if (!GameEndUI) return;
 
-	// 尝试C++接口设置数据
 	if (UFPSGameEndWidget* EndWidget = Cast<UFPSGameEndWidget>(GameEndUI))
 	{
 		EndWidget->UpdateScoreboard(
@@ -42,40 +41,35 @@ void AFPSPlayerController::Client_GameEnd_Implementation(
 	SetShowMouseCursor(true);
 }
 
-// ======================================================================
-// Server RPC
-// ======================================================================
-
+// Server_RequestRespawn_Validate：重生请求验证，始终允许
+// 流程：返回 true
 bool AFPSPlayerController::Server_RequestRespawn_Validate()
 {
 	return true;
 }
 
+// Server_RequestRespawn_Implementation：客户端请求重生，销毁旧 Pawn 并调用 GameMode::RestartPlayer
+// 流程：HideRespawnUI → 恢复 GameOnly 输入模式 → 销毁旧 Pawn → 调用 GM->RestartPlayer
 void AFPSPlayerController::Server_RequestRespawn_Implementation()
 {
 	HideRespawnUI();
 
-	// 恢复游戏输入模式
 	SetInputMode(FInputModeGameOnly());
 	SetShowMouseCursor(false);
 
-	// 销毁旧 Pawn 残留体
 	if (APawn* PrevPawn = GetPawn())
 	{
 		PrevPawn->Destroy();
 	}
 
-	// 引擎标准重生流程
 	if (AFPSGameMode* GM = Cast<AFPSGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		GM->RestartPlayer(this);
 	}
 }
 
-// ======================================================================
-// 内部方法
-// ======================================================================
-
+// ShowRespawnUI：创建并显示重生界面，设置击杀者名称
+// 流程：检查 RespawnUIClass → HideRespawnUI 清理旧实例 → CreateWidget → 尝试设置击杀者名 → AddToViewport → UIOnly 输入模式
 void AFPSPlayerController::ShowRespawnUI(const FString& KillerName)
 {
 	if (!RespawnUIClass) return;
@@ -85,7 +79,6 @@ void AFPSPlayerController::ShowRespawnUI(const FString& KillerName)
 	RespawnUIInstance = CreateWidget<UUserWidget>(this, RespawnUIClass);
 	if (!RespawnUIInstance) return;
 
-	// 设置击杀者名称
 	if (UFPSRespawnWidget* RespawnWidget = Cast<UFPSRespawnWidget>(RespawnUIInstance))
 	{
 		RespawnWidget->SetKillerName(KillerName);
@@ -96,6 +89,8 @@ void AFPSPlayerController::ShowRespawnUI(const FString& KillerName)
 	SetShowMouseCursor(true);
 }
 
+// HideRespawnUI：隐藏并销毁当前重生 UI 实例
+// 流程：检查 RespawnUIInstance → RemoveFromParent → 置空
 void AFPSPlayerController::HideRespawnUI()
 {
 	if (RespawnUIInstance)
@@ -105,32 +100,28 @@ void AFPSPlayerController::HideRespawnUI()
 	}
 }
 
-// ======================================================================
-// 生命周期
-// ======================================================================
-
+// OnPossess：Possess 新 Pawn 时绑定角色/武器委托
+// 流程：调用 Super → 解绑旧委托 → Cast 新 Pawn → 绑定角色委托 → 订阅武器切换事件 → SetTimerForNextTick 延迟绑定武器
 void AFPSPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	// 解绑旧角色的委托
 	UnbindCharacterDelegates();
 	UnbindWeaponHitDelegate();
 
-	// 绑定新角色的委托
 	if (AFPS_CharacterBase* Char = Cast<AFPS_CharacterBase>(InPawn))
 	{
 		CachedCharacter = Char;
 		BindCharacterDelegates(Char);
 
-		// 监听武器切换，重新绑定命中委托
 		Char->OnWeaponActivated.AddDynamic(this, &AFPSPlayerController::OnWeaponActivatedHandler);
 
-		// 延迟绑定武器（等待 BeginPlay 生成武器）
 		GetWorldTimerManager().SetTimerForNextTick(this, &AFPSPlayerController::BindWeaponAfterRespawn);
 	}
 }
 
+// EndPlay：结束时解绑所有委托
+// 流程：UnbindCharacterDelegates → UnbindWeaponHitDelegate → Super::EndPlay
 void AFPSPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnbindCharacterDelegates();
@@ -138,16 +129,15 @@ void AFPSPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-// ======================================================================
-// 委托绑定管理
-// ======================================================================
-
+// BindCharacterDelegates：绑定角色的委托（当前为空实现，击杀通知由 GameMode 直接调用 Client RPC）
+// 流程：检查参数有效性
 void AFPSPlayerController::BindCharacterDelegates(AFPS_CharacterBase* InCharacter)
 {
 	if (!InCharacter) return;
-	// 不再订阅 OnKilled — 击杀通知由 GameMode::OnCharacterKilled 直接调用 Client_OnKillConfirmed
 }
 
+// UnbindCharacterDelegates：解绑旧角色的武器切换委托并清除缓存
+// 流程：检查 CachedCharacter → 解绑 OnWeaponActivated → 置空 CachedCharacter
 void AFPSPlayerController::UnbindCharacterDelegates()
 {
 	if (CachedCharacter)
@@ -157,12 +147,16 @@ void AFPSPlayerController::UnbindCharacterDelegates()
 	}
 }
 
+// BindWeaponHitDelegate：绑定武器的命中确认委托
+// 流程：检查 Weapon 有效性 → 绑定 HandleHitConfirmed
 void AFPSPlayerController::BindWeaponHitDelegate(AWeaponActor* Weapon)
 {
 	if (!Weapon) return;
 	Weapon->OnHitConfirmed.AddDynamic(this, &AFPSPlayerController::HandleHitConfirmed);
 }
 
+// UnbindWeaponHitDelegate：解绑旧武器的命中委托并清除缓存
+// 流程：检查 CachedWeapon → 解绑 OnHitConfirmed → 置空 CachedWeapon
 void AFPSPlayerController::UnbindWeaponHitDelegate()
 {
 	if (CachedWeapon)
@@ -172,24 +166,24 @@ void AFPSPlayerController::UnbindWeaponHitDelegate()
 	}
 }
 
-// ======================================================================
-// 委托回调 → Client RPC
-// ======================================================================
-
+// HandleHitConfirmed：服务器端命中回调，转发 Client RPC 到客户端
+// 流程：直接调用 Client_OnHitConfirmed(bKilled)
 void AFPSPlayerController::HandleHitConfirmed(bool bKilled)
 {
-	// 服务器端回调，转发到客户端
 	Client_OnHitConfirmed(bKilled);
 }
 
+// OnWeaponActivatedHandler：武器切换时重新绑定命中委托到新武器
+// 流程：解绑旧武器 → 缓存新武器 → 绑定新武器命中委托
 void AFPSPlayerController::OnWeaponActivatedHandler(AWeaponActor* NewWeapon)
 {
-	// 武器切换：解绑旧武器，绑定新武器
 	UnbindWeaponHitDelegate();
 	CachedWeapon = NewWeapon;
 	BindWeaponHitDelegate(NewWeapon);
 }
 
+// BindWeaponAfterRespawn：Possess 后延迟绑定武器委托与输入
+// 流程：解绑旧武器 → 从 CachedCharacter->CurrentWeapon 获取当前武器 → 绑定命中委托 → TryBindInput 重试输入绑定
 void AFPSPlayerController::BindWeaponAfterRespawn()
 {
 	UnbindWeaponHitDelegate();
@@ -198,24 +192,19 @@ void AFPSPlayerController::BindWeaponAfterRespawn()
 		CachedWeapon = CachedCharacter->CurrentWeapon;
 		BindWeaponHitDelegate(CachedWeapon);
 
-		// 重新绑定武器输入（BeginPlay 时 Pawn 尚未 Possess，BindInput 失败，需要在 Possess 后重试）
-		// 先清除旧的 CachedInputComponent，确保 TryBindInput 不被阻挡
 		CachedWeapon->SetWeaponActionsLocked(false);
 		CachedWeapon->TryBindInput();
 	}
 }
 
-// ======================================================================
-// 命中/击杀反馈 Client RPC
-// ======================================================================
-
+// Client_OnHitConfirmed_Implementation：客户端命中反馈，显示命中标记并播放音效
+// 流程：检查 IsLocalController 和 CachedHUDWidget → ShowHitMarker → 获取武器引用（CachedWeapon 或 Pawn->CurrentWeapon）→ 播放命中音效
 void AFPSPlayerController::Client_OnHitConfirmed_Implementation(bool bKilled)
 {
 	if (!IsLocalController() || !CachedHUDWidget) return;
 
 	CachedHUDWidget->ShowHitMarker();
 
-	// 获取武器引用（CachedWeapon 仅服务端设置，客户端需要回退到 GetPawn）
 	AWeaponActor* Weapon = CachedWeapon.Get();
 	if (!Weapon)
 	{
@@ -229,6 +218,8 @@ void AFPSPlayerController::Client_OnHitConfirmed_Implementation(bool bKilled)
 	}
 }
 
+// Client_OnKillConfirmed_Implementation：客户端击杀反馈，显示击杀指示器并播放音效
+// 流程：检查 IsLocalController 和 CachedHUDWidget → ShowKillIndicator → 获取武器引用 → 播放击杀音效
 void AFPSPlayerController::Client_OnKillConfirmed_Implementation()
 {
 	if (!IsLocalController() || !CachedHUDWidget) return;

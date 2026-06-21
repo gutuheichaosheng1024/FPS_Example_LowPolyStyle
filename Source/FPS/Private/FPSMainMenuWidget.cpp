@@ -5,20 +5,21 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 
+// NativeConstruct：初始化大厅界面，绑定委托和按钮事件，首次自动搜索房间
+// 流程：调用 Super → 诊断日志检查 BindWidget 绑定 → 获取 UFPSGameInstance 并绑定房间列表/创建成功委托 →
+//       绑定按钮 OnClicked → 设置初始按钮状态 → 延迟 1 秒执行 DelayedFindRooms
 void UFPSMainMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
 	UE_LOG(LogTemp, Log, TEXT("MainMenuWidget: NativeConstruct called"));
 
-	// 诊断：检查 BindWidget 绑定
 	UE_LOG(LogTemp, Log, TEXT("  RoomListContainer=%s"), RoomListContainer ? TEXT("OK") : TEXT("NULL"));
 	UE_LOG(LogTemp, Log, TEXT("  CreateButton=%s"), CreateButton ? TEXT("OK") : TEXT("NULL"));
 	UE_LOG(LogTemp, Log, TEXT("  JoinButton=%s"), JoinButton ? TEXT("OK") : TEXT("NULL"));
 	UE_LOG(LogTemp, Log, TEXT("  RefreshButton=%s"), RefreshButton ? TEXT("OK") : TEXT("NULL"));
 	UE_LOG(LogTemp, Log, TEXT("  StatusText=%s"), StatusText ? TEXT("OK") : TEXT("NULL"));
 
-	// 获取 GameInstance 并绑定委托
 	CachedGameInstance = Cast<UFPSGameInstance>(GetGameInstance());
 	UE_LOG(LogTemp, Log, TEXT("  GameInstance=%s"), CachedGameInstance ? TEXT("OK") : TEXT("NULL"));
 
@@ -28,7 +29,6 @@ void UFPSMainMenuWidget::NativeConstruct()
 		CachedGameInstance->OnCreateRoomSuccess.AddDynamic(this, &UFPSMainMenuWidget::OnCreateRoomSuccess);
 	}
 
-	// 绑定按钮点击
 	if (CreateButton)
 		CreateButton->OnClicked.AddDynamic(this, &UFPSMainMenuWidget::OnCreateButtonClicked);
 	if (JoinButton)
@@ -38,13 +38,11 @@ void UFPSMainMenuWidget::NativeConstruct()
 	if (BackButton)
 		BackButton->OnClicked.AddDynamic(this, &UFPSMainMenuWidget::OnBackClicked);
 
-	// 初始状态
 	if (JoinButton)
 		JoinButton->SetIsEnabled(false);
 	if (RefreshButton)
 		RefreshButton->SetIsEnabled(false);
 
-	// 首次自动搜索（延迟执行，等待 OnlineSubsystem 就绪）
 	if (CachedGameInstance)
 	{
 		SetStatusText(TEXT("正在搜索房间..."));
@@ -54,15 +52,15 @@ void UFPSMainMenuWidget::NativeConstruct()
 	}
 }
 
+// NativeDestruct：清理定时器和委托绑定
+// 流程：清除 SearchTimerHandle → 解绑 GameInstance 委托 → 调用 Super::NativeDestruct
 void UFPSMainMenuWidget::NativeDestruct()
 {
-	// 清除延迟搜索定时器
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(SearchTimerHandle);
 	}
 
-	// 解绑委托
 	if (CachedGameInstance)
 	{
 		CachedGameInstance->OnRoomListUpdated.RemoveDynamic(this, &UFPSMainMenuWidget::OnRoomListUpdated);
@@ -72,6 +70,8 @@ void UFPSMainMenuWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+// DelayedFindRooms：延迟执行房间搜索
+// 流程：检查 CachedGameInstance → 调用 FindRooms
 void UFPSMainMenuWidget::DelayedFindRooms()
 {
 	if (CachedGameInstance)
@@ -81,11 +81,10 @@ void UFPSMainMenuWidget::DelayedFindRooms()
 	}
 }
 
-// ---------- 搜索结果回调 ----------
-
+// OnRoomListUpdated：房间列表更新回调，结果为空时自动重试一次
+// 流程：检查结果数 → 为 0 且 RetryCount < 1 则延迟 2 秒重试 → 否则调用 RefreshRoomList 刷新列表
 void UFPSMainMenuWidget::OnRoomListUpdated()
 {
-	// 搜索结果为 0 时自动重试一次（PIE 时序问题）
 	if (CachedGameInstance && CachedGameInstance->GetRoomList().Num() == 0)
 	{
 		if (RetryCount < 1)
@@ -103,6 +102,9 @@ void UFPSMainMenuWidget::OnRoomListUpdated()
 	RefreshRoomList();
 }
 
+// RefreshRoomList：清空旧条目，遍历 RoomList 动态创建 UFPSRoomEntryWidget 填充列表
+// 流程：清空 RoomListContainer → 遍历 RoomList → CreateWidget UFPSRoomEntryWidget → SetRoomData →
+//       记录 ResultToSearchIndex 映射 → 绑定 OnRoomEntryClicked → AddChild → 更新状态文本和按钮
 void UFPSMainMenuWidget::RefreshRoomList()
 {
 	if (!CachedGameInstance || !RoomListContainer)
@@ -113,7 +115,6 @@ void UFPSMainMenuWidget::RefreshRoomList()
 		return;
 	}
 
-	// 清空旧条目
 	RoomListContainer->ClearChildren();
 	RoomEntries.Empty();
 	ResultToSearchIndex.Empty();
@@ -141,7 +142,6 @@ void UFPSMainMenuWidget::RefreshRoomList()
 			continue;
 		}
 
-		// 设置数据（i 是 RoomList 的 UI 索引，ResultIndex 是 SearchResults 的原始索引）
 		Entry->SetRoomData(
 			i,
 			RoomList[i].ServerName,
@@ -151,14 +151,11 @@ void UFPSMainMenuWidget::RefreshRoomList()
 			RoomList[i].PingInMs
 		);
 
-		// 记录 UI 索引到 SearchResults 索引的映射
 		ResultToSearchIndex.Add(RoomList[i].ResultIndex);
 
-		// 绑定点击事件
 		Entry->OnRoomEntryClicked.AddDynamic(this, &UFPSMainMenuWidget::OnRoomEntryClicked);
 		UE_LOG(LogTemp, Log, TEXT("  Bound OnRoomEntryClicked for room %d"), i);
 
-		// 添加到列表
 		RoomListContainer->AddChild(Entry);
 		RoomEntries.Add(Entry);
 	}
@@ -168,18 +165,16 @@ void UFPSMainMenuWidget::RefreshRoomList()
 
 	SetStatusText(FString::Printf(TEXT("找到 %d 个房间"), RoomList.Num()));
 
-	// 通知蓝图层更新（如有需要）
 	OnRoomListUpdatedBP();
 }
 
-// ---------- 条目点击 ----------
-
+// OnRoomEntryClicked：房间条目被点击，更新选中状态并启用加入按钮
+// 流程：记录 SelectedRoomIndex → 遍历所有条目更新选中状态 → 启用 JoinButton
 void UFPSMainMenuWidget::OnRoomEntryClicked(int32 RoomIndex)
 {
 	UE_LOG(LogTemp, Log, TEXT("MainMenu: OnRoomEntryClicked, RoomIndex=%d"), RoomIndex);
 	SelectedRoomIndex = RoomIndex;
 
-	// 更新所有条目的选中状态
 	for (int32 i = 0; i < RoomEntries.Num(); i++)
 	{
 		if (RoomEntries[i])
@@ -192,20 +187,22 @@ void UFPSMainMenuWidget::OnRoomEntryClicked(int32 RoomIndex)
 		JoinButton->SetIsEnabled(true);
 }
 
-// ---------- 创建房间成功 ----------
-
+// OnCreateRoomSuccess：房间创建成功回调，更新状态文本
+// 流程：SetStatusText 提示进入中
 void UFPSMainMenuWidget::OnCreateRoomSuccess()
 {
 	SetStatusText(TEXT("房间创建成功，正在进入..."));
 }
 
-// ---------- 按钮点击 ----------
-
+// OnCreateButtonClicked：打开创建房间子界面
+// 流程：OpenSubScreen(CreateRoomScreenClass)
 void UFPSMainMenuWidget::OnCreateButtonClicked()
 {
 	OpenSubScreen(CreateRoomScreenClass);
 }
 
+// OnJoinButtonClicked：加入选中的房间
+// 流程：校验 SelectedRoomIndex 和 ResultToSearchIndex → 通过映射表获取 SearchResults 索引 → 调用 JoinRoom → 禁用按钮
 void UFPSMainMenuWidget::OnJoinButtonClicked()
 {
 	if (!CachedGameInstance || SelectedRoomIndex < 0)
@@ -214,7 +211,6 @@ void UFPSMainMenuWidget::OnJoinButtonClicked()
 		return;
 	}
 
-	// 通过映射表获取 SearchResults 中的真实索引
 	if (!ResultToSearchIndex.IsValidIndex(SelectedRoomIndex))
 	{
 		SetStatusText(TEXT("房间索引无效"));
@@ -229,6 +225,8 @@ void UFPSMainMenuWidget::OnJoinButtonClicked()
 		JoinButton->SetIsEnabled(false);
 }
 
+// OnRefreshButtonClicked：手动刷新房间列表
+// 流程：检查 CachedGameInstance → 设置状态文本 → 禁用刷新按钮 → 延迟 0.5 秒调用 DelayedFindRooms
 void UFPSMainMenuWidget::OnRefreshButtonClicked()
 {
 	if (!CachedGameInstance) return;
@@ -238,19 +236,20 @@ void UFPSMainMenuWidget::OnRefreshButtonClicked()
 	if (RefreshButton)
 		RefreshButton->SetIsEnabled(false);
 
-	// 延迟搜索，避免与已有搜索冲突
 	FTimerDelegate TimerDelegate;
 	TimerDelegate.BindUObject(this, &UFPSMainMenuWidget::DelayedFindRooms);
 	GetWorld()->GetTimerManager().SetTimer(SearchTimerHandle, TimerDelegate, 0.5f, false);
 }
 
+// OnBackClicked：返回上一级界面
+// 流程：CloseSelf
 void UFPSMainMenuWidget::OnBackClicked()
 {
 	CloseSelf();
 }
 
-// ---------- 工具 ----------
-
+// SetStatusText：设置状态文本，封装空指针检查
+// 流程：检查 StatusText 有效性 → SetText
 void UFPSMainMenuWidget::SetStatusText(const FString& Text)
 {
 	if (StatusText)

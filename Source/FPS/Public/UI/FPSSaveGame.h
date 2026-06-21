@@ -6,8 +6,10 @@
 #include "FPSSaveGame.generated.h"
 
 /**
- * 游戏设置持久化
- * 存储音量、分辨率、全屏等设置到本地存档
+ * UFPSSaveGame — 游戏设置持久化存储，保存音量、分辨率、全屏、玩家名称和准星配置到本地存档
+ *
+ * 职责：提供 LoadSettings/SaveSettings 管理通用设置（音量/分辨率/全屏/玩家名）；提供 SaveCrosshairConfig/LoadCrosshairConfig 管理准星配置的独立存档；静态方法可跨界面直接调用
+ * 使用：USaveGame、UGameplayStatics、FCrosshairConfig
  */
 UCLASS()
 class FPS_API UFPSSaveGame : public USaveGame
@@ -27,11 +29,9 @@ public:
     UPROPERTY()
     bool bFullscreen = true;
 
-    /** 玩家用户名 */
     UPROPERTY()
     FString PlayerName = TEXT("Player");
 
-    // ---------- 准星配置 ----------
     UPROPERTY()
     int32 CrosshairShape = 2;
 
@@ -68,31 +68,24 @@ public:
     UPROPERTY()
     float CrosshairOverallScale = 1.f;
 
-    // ---------- 存档常量 ----------
     static const FString SaveSlotName;
     static const int32 UserIndex;
 
-    /** 加载设置，不存在则返回默认值 */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static UFPSSaveGame* LoadSettings();
 
-    /** 保存设置（保留已存储的 PlayerName） */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static void SaveSettings(float Master, float Background, const FString& Res, bool bInFullscreen);
 
-    /** 读取用户名，不存在返回 "Player" */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static FString LoadPlayerName();
 
-    /** 保存用户名（保留已存储的其他设置） */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static void SavePlayerName(const FString& Name);
 
-    /** 保存准星配置 */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static void SaveCrosshairConfig(const FCrosshairConfig& Config);
 
-    /** 加载准星配置，不存在返回默认值 */
     UFUNCTION(BlueprintCallable, Category = "Settings")
     static FCrosshairConfig LoadCrosshairConfig();
 };

@@ -6,12 +6,15 @@
 #include "Weapon/WeaponDataConfig.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
+
 UBTTask_FireWeapon::UBTTask_FireWeapon()
 {
     NodeName = TEXT("Fire Weapon");
     bNotifyTick = true;
 }
 
+// 根据命中概率计算瞄准偏移：命中时概率加权选骨骼，未命中时环形随机偏转
+// 流程：计算总命中概率 → 随机掷骰 → 未命中则环形随机偏转方向 → 命中则概率加权选目标骨骼 → 写入AIChar->AimTargetLocation
 void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* Target) const
 {
     if (!AIChar || !Target)
@@ -25,14 +28,12 @@ void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* 
 
     const UAIAttackConfig* Config = AIChar->AttackConfig;
 
-    // 无配置 → 直瞄目标
     if (!Config || Config->AimBones.Num() == 0)
     {
         AIChar->AimTargetLocation = TargetLocation;
         return;
     }
 
-    // 计算总命中概率
     float TotalProb = 0.f;
     for (const FAIAimBoneEntry& Entry : Config->AimBones)
     {
@@ -44,17 +45,13 @@ void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* 
 
     if (Roll > TotalProb)
     {
-        // -------- 未命中：环形随机偏转，保证不低于最小角度 ----------
-        // 选一个垂直于 BaseDir 的随机轴
         FVector PerpAxis = FVector::CrossProduct(BaseDir, FVector::UpVector).GetSafeNormal();
         if (PerpAxis.IsNearlyZero())
             PerpAxis = FVector::CrossProduct(BaseDir, FVector::RightVector).GetSafeNormal();
 
-        // 随机方位角绕 BaseDir 旋转偏轴线
         const float Azimuth = FMath::FRand() * 360.f;
         PerpAxis = PerpAxis.RotateAngleAxis(Azimuth, BaseDir);
 
-        // 环形：MinMissAngle ~ MissConeAngle
         const float MissAngle = FMath::RandRange(Config->MinMissAngle, Config->MissConeAngle);
         const FVector MissDir = BaseDir.RotateAngleAxis(MissAngle, PerpAxis);
 
@@ -62,7 +59,6 @@ void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* 
     }
     else
     {
-        // -------- 命中：概率加权选骨骼 ----------
         float Cumulative = 0.f;
         FName SelectedBone = NAME_None;
         for (const FAIAimBoneEntry& Entry : Config->AimBones)
@@ -75,7 +71,7 @@ void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* 
             }
         }
 
-        FVector BoneLocation = TargetLocation; // 回退到 Actor 位置
+        FVector BoneLocation = TargetLocation;
         if (SelectedBone != NAME_None)
         {
             if (const USkeletalMeshComponent* TargetMesh = Target->FindComponentByClass<USkeletalMeshComponent>())
@@ -91,6 +87,8 @@ void UBTTask_FireWeapon::ApplyAimOffset(AFPS_AICharacter* AIChar, const AActor* 
     }
 }
 
+// 开始开火：验证AI角色/武器/目标/弹药 → 应用瞄准偏移 → 开始射击 → 进入InProgress持续Tick
+// 流程：获取AICharacter → 验证CurrentWeapon → 从黑板获取TargetActor → 检查弹药 → ApplyAimOffset → FireAtTarget → 初始化计时器
 EBTNodeResult::Type UBTTask_FireWeapon::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());
@@ -105,7 +103,6 @@ EBTNodeResult::Type UBTTask_FireWeapon::ExecuteTask(UBehaviorTreeComponent& Owne
     if (!AIChar->CurrentWeapon->HasAnyAmmo())
         return EBTNodeResult::Failed;
 
-    // 首次开火前应用命中偏移
     ApplyAimOffset(AIChar, Target);
     AIChar->FireAtTarget(Target);
 
@@ -115,6 +112,8 @@ EBTNodeResult::Type UBTTask_FireWeapon::ExecuteTask(UBehaviorTreeComponent& Owne
     return EBTNodeResult::InProgress;
 }
 
+// 持续开火Tick：验证目标/弹药 → 更新瞄准偏移 → 半自动模式下按FireInterval重新开火
+// 流程：验证AIChar/Weapon/BB/Target → 检查弹药 → ApplyAimOffset → 半自动模式累计时间并按FireInterval触发FireAtTarget → 失败条件中止任务
 void UBTTask_FireWeapon::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());
@@ -154,10 +153,8 @@ void UBTTask_FireWeapon::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Node
         return;
     }
 
-    // 每帧更新瞄准点（保持追瞄目标 + 每发重新掷骰子）
     ApplyAimOffset(AIChar, Target);
 
-    // 半自动：按 FireInterval 重新开火
     if (Config->FireMode == EWeaponFireMode::SemiAuto)
     {
         FFireWeaponTaskMemory* Memory = reinterpret_cast<FFireWeaponTaskMemory*>(NodeMemory);
@@ -171,6 +168,8 @@ void UBTTask_FireWeapon::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Node
     }
 }
 
+// 中止开火任务：停止AI射击并返回Aborted
+// 流程：获取AICharacter → StopFiring → 返回EBTNodeResult::Aborted
 EBTNodeResult::Type UBTTask_FireWeapon::AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());

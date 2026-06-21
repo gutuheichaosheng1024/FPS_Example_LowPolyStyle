@@ -12,6 +12,8 @@ UBTService_UpdateTarget::UBTService_UpdateTarget()
     Interval = 0.15f;
 }
 
+// 定期更新目标信息：死亡检测 → 位置刷新 → 瞄准更新 → 距离计算 → 视线检测 → ShouldEngage联合判定
+// 流程：验证AIChar/BB/Target → 目标死亡则清除TargetActor → 刷新LastKnownLocation → AimAtTarget → 计算Distance并更新InFireRange → LineOfSightTo → 合并bInRange&&bHasLOS写入ShouldEngage
 void UBTService_UpdateTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
     AFPS_AICharacter* AIChar = Cast<AFPS_AICharacter>(OwnerComp.GetAIOwner()->GetPawn());
@@ -23,7 +25,6 @@ void UBTService_UpdateTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
     AActor* Target = Cast<AActor>(BB->GetValueAsObject(AFPS_AIController::BBKey_TargetActor));
     if (Target)
     {
-        // 目标已死亡 → 清除 TargetActor，BT 自动回 Patrol
         if (const AFPS_CharacterBase* TargetChar = Cast<AFPS_CharacterBase>(Target))
         {
             if (TargetChar->IsDead())
@@ -33,17 +34,13 @@ void UBTService_UpdateTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
             }
         }
 
-        // 持续刷新目标位置（供 MoveTo 使用）
         BB->SetValueAsVector(AFPS_AIController::BBKey_LastKnownLocation, Target->GetActorLocation());
 
-        // 更新瞄准方向
         AIChar->AimAtTarget(Target);
 
-        // 距离
         const float Distance = FVector::Dist(AIChar->GetActorLocation(), Target->GetActorLocation());
         BB->SetValueAsFloat(AFPS_AIController::BBKey_DistanceToTarget, Distance);
 
-        // 距离 + 视线 → 合并判定 ShouldEngage
         const UAIAttackConfig* Config = AIChar->AttackConfig;
         const float FireRange = Config ? Config->FireRange : 1500.f;
         const bool bInRange = (Distance <= FireRange);

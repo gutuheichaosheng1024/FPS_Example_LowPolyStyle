@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,6 +11,12 @@ class AWeaponActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPickUp, AFPS_CharacterBase*, PickUpCharacter);
 
+/**
+ * UPickUpComponent — 武器拾取碰撞组件
+ *
+ * 职责：作为 SphereComponent 检测角色重叠，在服务器端或通过 RPC 触发武器拾取逻辑，管理拾取后的组件状态（启停 Tick/碰撞）
+ * 使用：AFPS_CharacterBase（拾取角色）、AWeaponActor（所属武器）
+ */
 UCLASS(Blueprintable, BlueprintType)
 class FPS_API UPickUpComponent : public USphereComponent
 {
@@ -21,7 +25,6 @@ class FPS_API UPickUpComponent : public USphereComponent
 public:
     UPickUpComponent();
 
-    /** 玩家成功拾取武器时回调 */
     UPROPERTY(BlueprintAssignable, Category = "Interaction")
     FOnPickUp OnPickUp;
 

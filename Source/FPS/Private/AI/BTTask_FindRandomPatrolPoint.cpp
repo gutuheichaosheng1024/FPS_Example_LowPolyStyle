@@ -9,6 +9,8 @@ UBTTask_FindRandomPatrolPoint::UBTTask_FindRandomPatrolPoint()
     NodeName = TEXT("Find Random Patrol Point");
 }
 
+// 查找随机巡逻点：通过导航系统在AI周围SearchRadius内查找可达点，写入黑板
+// 流程：获取AIController和Pawn → 验证BB和OutputLocationKey → 获取NavigationSystem → GetRandomReachablePointInRadius → 写入BB → 返回Succeeded/Failed
 EBTNodeResult::Type UBTTask_FindRandomPatrolPoint::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
     AAIController* AICon = OwnerComp.GetAIOwner();

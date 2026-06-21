@@ -14,22 +14,25 @@ struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+/**
+ * AFP_Character — player-controlled character with first-person camera and Enhanced Input
+ *
+ * 职责：第一人称摄像机与手臂网格、Enhanced Input 输入绑定与处理、冲刺/瞄准互斥状态机、IGenericTeamAgentInterface 队伍标识、死亡时布娃娃与输入禁用
+ * 使用：UCameraComponent, UEnhancedInputComponent, UInputAction, UInputMappingContext, AFPS_CharacterBase
+ */
 UCLASS(config = Game)
 class FPS_API AFP_Character : public AFPS_CharacterBase, public IGenericTeamAgentInterface
 {
     GENERATED_BODY()
 
 public:
-    // ---------- 获取组件 ----------
     USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
     UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
-    // ---------- 多态接口覆盖 ----------
     virtual FVector GetShootLocation() const override;
     virtual FRotator GetShootRotation() const override;
     virtual USkeletalMeshComponent* GetFPAnimMesh() const override;
 
-    // ---------- 运动覆盖 (输入驱动的互斥状态机) ----------
     virtual void Sprint() override;
     virtual void StopSprint() override;
     virtual void Aim() override;
@@ -40,20 +43,16 @@ public:
     virtual void HandleDeath() override;
     virtual void Multicast_OnDeath_Implementation() override;
 
-    // ---------- IGenericTeamAgentInterface ----------
     virtual FGenericTeamId GetGenericTeamId() const override { return TeamId; }
     virtual void SetGenericTeamId(const FGenericTeamId& NewTeamId) override { TeamId = NewTeamId; }
 
 protected:
-    // 第一人称手臂网格
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Mesh)
     USkeletalMeshComponent* Mesh1P;
 
-    // 第一人称摄像机
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     UCameraComponent* FirstPersonCameraComponent;
 
-    // 输入映射
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     UInputMappingContext* DefaultMappingContext;
 
@@ -78,11 +77,9 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
     UInputAction* DropWeaponAction;
 
-    // 按键保持状态
     bool isSprintHeld = false;
     bool isAimHeld = false;
 
-    /** 玩家队伍 ID（AI 用此判断敌我，默认 0=与 AI 的 TeamId=1 互斥） */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
     FGenericTeamId TeamId = FGenericTeamId(0);
 

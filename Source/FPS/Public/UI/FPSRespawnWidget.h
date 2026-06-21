@@ -8,13 +8,10 @@ class UTextBlock;
 class UButton;
 
 /**
- * 重生界面
- * 显示击杀者名称，提供重生按钮
- * 由 AFPSPlayerController::Client_ShowRespawnUI 创建
+ * UFPSRespawnWidget — 重生界面，显示击杀者名称并提供重生按钮
  *
- * 蓝图子类需要:
- *   1. Text Block 命名 KillerNameText
- *   2. Button 命名 RespawnButton
+ * 职责：接收击杀者名称并按格式模板显示；重生按钮点击时在客户端恢复游戏输入模式并通过 Server RPC 请求重生；由 AFPSPlayerController::Client_ShowRespawnUI 创建
+ * 使用：UFPSBaseMenuWidget、AFPSPlayerController、UTextBlock、UButton
  */
 UCLASS(Abstract)
 class FPS_API UFPSRespawnWidget : public UFPSBaseMenuWidget
@@ -22,14 +19,11 @@ class FPS_API UFPSRespawnWidget : public UFPSBaseMenuWidget
 	GENERATED_BODY()
 
 public:
-	/** 设置击杀者名称 */
 	UFUNCTION(BlueprintCallable, Category = "Respawn")
 	void SetKillerName(const FString& Name);
 
 protected:
 	virtual void NativeConstruct() override;
-
-	// ---------- BindWidget ----------
 
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* KillerNameText;
@@ -37,7 +31,6 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UButton* RespawnButton;
 
-	/** 击杀信息格式（{0} 替换为击杀者名） */
 	UPROPERTY(EditDefaultsOnly, Category = "Respawn")
 	FString KillerNameFormat = TEXT("你被 {0} 击杀了");
 

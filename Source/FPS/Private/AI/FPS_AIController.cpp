@@ -46,6 +46,8 @@ void AFPS_AIController::BeginPlay()
     Super::BeginPlay();
 }
 
+// 接管Pawn时执行：同步团队ID → 运行行为树 → 绑定感知回调
+// 流程：Super::OnPossess → 从AICharacter同步GenericTeamId → 运行BehaviorTree → 绑定OnTargetPerceptionUpdated
 void AFPS_AIController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
@@ -68,6 +70,8 @@ void AFPS_AIController::OnPossess(APawn* InPawn)
     }
 }
 
+// 处理AI感知目标更新：视觉写入TargetActor+LastKnownLocation，听觉仅写入LastKnownLocation，丢失时清除TargetActor
+// 流程：检查刺激类型(视觉/听觉) → 感测成功则写入LastKnownLocation → 视觉额外写入TargetActor → 丢失时若为视觉且当前目标匹配则清除TargetActor
 void AFPS_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
     UBlackboardComponent* BB = GetBlackboardComponent();
@@ -78,10 +82,8 @@ void AFPS_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Sti
 
     if (Stimulus.WasSuccessfullySensed())
     {
-        // 听觉和视觉都记录位置
         BB->SetValueAsVector(BBKey_LastKnownLocation, Stimulus.StimulusLocation);
 
-        // 只有视觉感知才写入 TargetActor（触发战斗），听觉只记录位置（触发调查）
         if (bIsSight)
         {
             BB->SetValueAsObject(BBKey_TargetActor, Actor);
@@ -89,7 +91,6 @@ void AFPS_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Sti
     }
     else
     {
-        // 丢失时，视觉丢失才清除目标
         if (bIsSight)
         {
             UObject* CurrentTarget = BB->GetValueAsObject(BBKey_TargetActor);

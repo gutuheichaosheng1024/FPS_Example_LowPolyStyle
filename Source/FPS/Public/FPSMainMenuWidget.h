@@ -11,13 +11,11 @@ class UButton;
 class UTextBlock;
 
 /**
- * 主菜单 Widget 基类
- * C++ 负责数据绑定和事件处理，蓝图子类负责布局
+ * UFPSMainMenuWidget — 主菜单大厅界面，管理房间列表显示与创建/加入/刷新操作
  *
- * 蓝图子类中需要：
- *   1. Vertical Box 命名 RoomListContainer
- *   2. Button 命名 CreateButton / JoinButton / RefreshButton
- *   3. Text Block 命名 StatusText
+ * 职责：绑定 UFPSGameInstance 的房间列表委托与创建房间成功委托、动态创建 UFPSRoomEntryWidget 列表、
+ *       按钮点击路由（创建房间/加入房间/刷新/返回）、搜索重试逻辑、房间索引到 SearchResults 的映射
+ * 使用：UFPSGameInstance, UFPSRoomEntryWidget, UVerticalBox, UButton, UTextBlock
  */
 UCLASS(Abstract)
 class FPS_API UFPSMainMenuWidget : public UFPSBaseMenuWidget
@@ -25,21 +23,15 @@ class FPS_API UFPSMainMenuWidget : public UFPSBaseMenuWidget
 	GENERATED_BODY()
 
 public:
-	// ---------- 蓝图可设置的属性 ----------
-
-	/** 房间条目 Widget 类，在蓝图 Class Defaults 中设置 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UFPSRoomEntryWidget> RoomEntryClass;
 
-	/** 创建房间界面类（蓝图 ClassDefaults 中设置） */
 	UPROPERTY(EditDefaultsOnly, Category = "Navigation")
 	TSubclassOf<UUserWidget> CreateRoomScreenClass;
 
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-
-	// ---------- BindWidget：蓝图中必须存在同名控件 ----------
 
 	UPROPERTY(meta = (BindWidget))
 	UVerticalBox* RoomListContainer = nullptr;
@@ -59,14 +51,10 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UButton* BackButton = nullptr;
 
-	// ---------- Blueprint 可覆盖的回调 ----------
-
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
 	void OnRoomListUpdatedBP();
 
 private:
-	// ---------- 事件处理（C++ 内部） ----------
-
 	UFUNCTION()
 	void OnRoomListUpdated();
 
@@ -78,8 +66,6 @@ private:
 
 	void RefreshRoomList();
 	void SetStatusText(const FString& Text);
-
-	// ---------- 按钮点击 ----------
 
 	UFUNCTION()
 	void OnCreateButtonClicked();
@@ -93,18 +79,13 @@ private:
 	UFUNCTION()
 	void OnBackClicked();
 
-	// ---------- 延迟搜索 ----------
-
 	UFUNCTION()
 	void DelayedFindRooms();
-
-	// ---------- 状态 ----------
 
 	int32 SelectedRoomIndex = -1;
 	int32 RetryCount = 0;
 	FTimerHandle SearchTimerHandle;
 
-	/** RoomList 索引 → SessionSearch->SearchResults 索引的映射 */
 	TArray<int32> ResultToSearchIndex;
 
 	UPROPERTY()

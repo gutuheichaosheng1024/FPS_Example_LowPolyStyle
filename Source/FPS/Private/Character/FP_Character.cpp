@@ -12,9 +12,18 @@
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
+// 构造函数：创建第一人称摄像机与手臂网格，配置可见性与TeamId
+// 流程：初始化胶囊体 → 配置第三人称旋转跟随控制器 → 创建 FP 摄像机 → 创建 FP 手臂网格(仅拥有者可见) → 隐藏 TP 网格 → 分配唯一 TeamId
 AFP_Character::AFP_Character()
 {
     GetCapsuleComponent()->InitCapsuleSize(55.f, 96.f);
+
+    bUseControllerRotationYaw = true;
+
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        MoveComp->bOrientRotationToMovement = false;
+    }
 
     FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
     FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
@@ -33,15 +42,15 @@ AFP_Character::AFP_Character()
         ThirdPersonMesh->SetOwnerNoSee(true);
     }
 
-    // 分配唯一 TeamId（在构造函数中设置，确保 OnPossess 之前已绑定）
     TeamId = FGenericTeamId(AFPS_CharacterBase::GetNextTeamId());
 }
 
+// 初始化：同步控制器 TeamId
+// 流程：调用父类 BeginPlay → 将控制器的 TeamId 同步为角色的 TeamId
 void AFP_Character::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 确保控制器与角色 TeamId 一致（控制器在 Possess 后可能尚未同步）
     if (AController* MyController = GetController())
     {
         if (IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(MyController))
@@ -51,6 +60,8 @@ void AFP_Character::BeginPlay()
     }
 }
 
+// 绑定 Enhanced Input 动作到处理函数
+// 流程：获取 EnhancedInputComponent → 绑定 Jump/Move/Look/Sprint/Aim/SwitchWeapon/DropWeapon → 添加 DefaultMappingContext 到子系统
 void AFP_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -103,6 +114,8 @@ void AFP_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     }
 }
 
+// 处理移动输入
+// 流程：获取二维输入向量 → 基于控制器 Yaw 构建前/右方向 → 调用 AddMovementInput
 void AFP_Character::Move(const FInputActionValue& Value)
 {
     const FVector2D MovementVector = Value.Get<FVector2D>();
@@ -118,6 +131,8 @@ void AFP_Character::Move(const FInputActionValue& Value)
     }
 }
 
+// 处理视角旋转输入
+// 流程：获取二维输入向量 → 应用 Yaw/Pitch → 通过 Server RPC 同步控制器旋转到服务器
 void AFP_Character::Look(const FInputActionValue& Value)
 {
     const FVector2D LookAxisVector = Value.Get<FVector2D>();
@@ -125,23 +140,30 @@ void AFP_Character::Look(const FInputActionValue& Value)
     {
         AddControllerYawInput(LookAxisVector.X);
         AddControllerPitchInput(-LookAxisVector.Y);
+
+        Server_SetRotation(Controller->GetControlRotation());
     }
 }
 
-// ---------- 运动覆盖 (输入驱动的互斥状态机) ----------
+// 玩家冲刺（输入驱动的互斥状态机）
+// 流程：检查换弹中则忽略 → 本地设置冲刺状态 → 通知服务器
 void AFP_Character::Sprint()
 {
     if (Reloading) return;
-    SetSprintingStateInternal(true);       // 本地预测
-    Server_SetSprinting(true);             // 通知服务器
+    SetSprintingStateInternal(true);
+    Server_SetSprinting(true);
 }
 
+// 玩家停止冲刺
+// 流程：本地清除冲刺状态 → 通知服务器
 void AFP_Character::StopSprint()
 {
-    SetSprintingStateInternal(false);      // 本地预测
-    Server_SetSprinting(false);            // 通知服务器
+    SetSprintingStateInternal(false);
+    Server_SetSprinting(false);
 }
 
+// 冲刺状态内部切换（冲刺与瞄准互斥）
+// 流程：更新按键保持标记 → 状态未变化则忽略 → 更新 Sprinting → 冲刺时取消瞄准 → 停止冲刺时恢复瞄准按键状态 → 应用移动速度
 void AFP_Character::SetSprintingStateInternal(bool bNewSprinting)
 {
     isSprintHeld = bNewSprinting;
@@ -160,18 +182,24 @@ void AFP_Character::SetSprintingStateInternal(bool bNewSprinting)
     ApplyMovementSpeed();
 }
 
+// 玩家瞄准
+// 流程：本地设置瞄准状态 → 通知服务器
 void AFP_Character::Aim()
 {
-    SetAimingStateInternal(true);          // 本地预测
-    Server_SetAiming(true);                // 通知服务器
+    SetAimingStateInternal(true);
+    Server_SetAiming(true);
 }
 
+// 玩家停止瞄准
+// 流程：本地清除瞄准状态 → 通知服务器
 void AFP_Character::StopAim()
 {
-    SetAimingStateInternal(false);         // 本地预测
-    Server_SetAiming(false);               // 通知服务器
+    SetAimingStateInternal(false);
+    Server_SetAiming(false);
 }
 
+// 瞄准状态内部切换（瞄准与冲刺互斥）
+// 流程：更新按键保持标记 → 状态未变化则忽略 → 更新 Aiming → 瞄准时取消冲刺 → 停止瞄准时恢复冲刺按键状态 → 应用移动速度
 void AFP_Character::SetAimingStateInternal(bool bNewAiming)
 {
     isAimHeld = bNewAiming;
@@ -190,49 +218,55 @@ void AFP_Character::SetAimingStateInternal(bool bNewAiming)
     ApplyMovementSpeed();
 }
 
-// ---------- 多态接口 ----------
+// 获取射击起点（玩家：第一人称摄像机位置）
+// 流程：返回 FirstPersonCameraComponent 的世界位置，备用返回 ActorLocation
 FVector AFP_Character::GetShootLocation() const
 {
     return FirstPersonCameraComponent ? FirstPersonCameraComponent->GetComponentLocation() : GetActorLocation();
 }
 
+// 获取射击旋转（玩家：控制器旋转）
+// 流程：返回 GetControlRotation
 FRotator AFP_Character::GetShootRotation() const
 {
     return GetControlRotation();
 }
 
+// 获取第一人称动画网格（玩家：手臂网格 Mesh1P）
+// 流程：返回 Mesh1P
 USkeletalMeshComponent* AFP_Character::GetFPAnimMesh() const
 {
     return Mesh1P;
 }
 
+// 玩家死亡处理
+// 流程：调用基类 HandleDeath（禁用碰撞/移动 + 广播 OnKilled）
 void AFP_Character::HandleDeath()
 {
-	Super::HandleDeath();  // 禁用碰撞+移动 + 广播OnKilled（触发GM计分+重生UI推送）
+    Super::HandleDeath();
 }
 
+// 玩家死亡多播表现
+// 流程：调用基类 Multicast_OnDeath → 禁用输入 → 销毁 FP 手臂网格 → TP 网格启用布娃娃物理
 void AFP_Character::Multicast_OnDeath_Implementation()
 {
-	Super::Multicast_OnDeath_Implementation();
+    Super::Multicast_OnDeath_Implementation();
 
-	// 禁用玩家输入（客户端本地）
-	if (APlayerController* PC = Cast<APlayerController>(Controller))
-	{
-		DisableInput(PC);
-	}
+    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    {
+        DisableInput(PC);
+    }
 
-	// 销毁 FP 网格（FP武器随Mesh1P销毁自动清理）
-	if (Mesh1P)
-	{
-		Mesh1P->DestroyComponent();
-	}
+    if (Mesh1P)
+    {
+        Mesh1P->DestroyComponent();
+    }
 
-	// TP 网格：布娃娃（角色由GameMode延迟销毁，布娃娃随之清理）
-	if (USkeletalMeshComponent* MeshTP = GetMesh())
-	{
-		MeshTP->SetOwnerNoSee(false);
-		MeshTP->SetSimulatePhysics(true);
-		MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
-		MeshTP->SetAnimInstanceClass(nullptr);
-	}
+    if (USkeletalMeshComponent* MeshTP = GetMesh())
+    {
+        MeshTP->SetOwnerNoSee(false);
+        MeshTP->SetSimulatePhysics(true);
+        MeshTP->SetCollisionProfileName(TEXT("Ragdoll"));
+        MeshTP->SetAnimInstanceClass(nullptr);
+    }
 }

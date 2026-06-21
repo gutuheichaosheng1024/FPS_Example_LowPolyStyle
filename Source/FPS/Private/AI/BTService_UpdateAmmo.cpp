@@ -10,6 +10,8 @@ UBTService_UpdateAmmo::UBTService_UpdateAmmo()
     Interval = 0.5f;
 }
 
+// 更新弹药状态到黑板：读取角色当前武器的HasAnyAmmo → 写入BBKey_HasAmmo
+// 流程：获取CharacterBase → 验证CurrentWeapon → 读取HasAnyAmmo → BB->SetValueAsBool
 void UBTService_UpdateAmmo::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
     AFPS_CharacterBase* Char = Cast<AFPS_CharacterBase>(OwnerComp.GetAIOwner()->GetPawn());

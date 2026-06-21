@@ -52,28 +52,26 @@ void AWeaponActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 
 void AWeaponActor::OnRep_CurrentAmmo()
 {
-    // 客户端收到弹药更新后的回调
-    // 可用于更新UI弹药显示
 }
 
+// Owner 复制回调：将 AActor::Owner 桥接到 OwningCharacter，解决客户端 OwningCharacter 为 null 的问题
+// 流程：调用父类 OnRep_Owner → 若 OwningCharacter 为空则将 GetOwner 转换为 AFPS_CharacterBase → 赋值给 OwningCharacter → 尝试绑定输入
 void AWeaponActor::OnRep_Owner()
 {
     Super::OnRep_Owner();
 
-    // 客户端收到 Owner 复制后，将 AActor::Owner 桥接到 OwningCharacter
-    // 解决客户端 OwningCharacter 为 null 导致武器操作全部失效的问题
     if (!OwningCharacter)
     {
         if (AFPS_CharacterBase* Char = Cast<AFPS_CharacterBase>(GetOwner()))
         {
             OwningCharacter = Char;
-
-            // 尝试绑定输入（OnRep_Owner 可能在 OnRep_CurrentWeapon 之后到达）
             TryBindInput();
         }
     }
 }
 
+// BeginPlay：初始化网格管理器、弹药和自动销毁定时器
+// 流程：缓存弹夹/瞄准插槽 → 设置静态组件 Owner 可见性 → 未装备时隐藏 FP Mesh 并应用掉落物理 → 从 DataConfig 初始化弹药 → 设置弹夹正常状态 → 未装备时禁用 Tick 并启动自动销毁
 void AWeaponActor::BeginPlay()
 {
     Super::BeginPlay();
@@ -94,7 +92,6 @@ void AWeaponActor::BeginPlay()
         TotalAmmo = DataConfig->DefaultMagazineNum * DataConfig->MaxAmmo;
     }
 
-    // 初始弹夹可见性
     MeshManager.SetMagazineNormalState();
 
     if (!bIsEquipped)
@@ -104,6 +101,8 @@ void AWeaponActor::BeginPlay()
     }
 }
 
+// EndPlay：清理输入绑定和所有定时器
+// 流程：解绑输入 → 清空 OwningCharacter → 清除所有定时器（AutoFire/Reload/PickupReactivate/AutoDestroy）→ 停止音效 → 清空委托
 void AWeaponActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     UnbindInput();
@@ -129,6 +128,8 @@ void AWeaponActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
+// Tick：更新扩散和后坐力
+// 流程：调用 SpreadHandler.UpdateSpread → 调用 RecoilHandler.UpdateRecoil
 void AWeaponActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
@@ -142,12 +143,13 @@ void AWeaponActor::Tick(float DeltaTime)
     }
 }
 
-// ---------- 装备 / 激活 / 丢弃 ----------
 bool AWeaponActor::Equip(AFPS_CharacterBase* TargetCharacter)
 {
     return HandleEquip(TargetCharacter);
 }
 
+// 装备武器到目标角色
+// 流程：验证目标角色和武器槽可用性 → 设置 OwningCharacter 和 Owner → Mesh 挂载到角色对应插槽 → AttachToActor → 禁用拾取组件并关闭物理 → 初始化后坐力/扩散处理器 → 绑定输入
 bool AWeaponActor::HandleEquip(AFPS_CharacterBase* TargetCharacter)
 {
     if (!IsValid(TargetCharacter)) return false;
@@ -175,11 +177,12 @@ void AWeaponActor::ActivateWeapon()
     HandleActivateWeapon();
 }
 
+// 激活武器视觉效果：显示 Mesh、弹夹状态、设置 AnimBP、播放拔枪动画
+// 流程：解锁武器操作 → 显示 FP/TP Mesh → 根据换弹状态设置弹夹可见性 → 尝试绑定输入 → 设置角色 FP/TP AnimBP → 播放拔枪蒙太奇
 void AWeaponActor::HandleActivateWeaponVisuals()
 {
     SetWeaponActionsLocked(false);
     MeshManager.ShowWeaponMeshes(true, WeaponMesh, WeaponMeshStatic);
-    // 弹夹状态：激活时根据换弹状态决定
     if (OwningCharacter && OwningCharacter->Reloading)
         MeshManager.SetMagazineReloadState();
     else
@@ -205,6 +208,8 @@ void AWeaponActor::HandleActivateWeaponVisuals()
     Unholster();
 }
 
+// 激活武器状态
+// 流程：设置 bIsEquipped/bIsActiveWeapon → 启用 Tick → 调用激活视觉效果
 void AWeaponActor::HandleActivateWeapon()
 {
     if (!OwningCharacter) return;
@@ -221,6 +226,8 @@ void AWeaponActor::DeactivateWeapon()
     HandleDeactivateWeapon();
 }
 
+// 停用武器视觉效果：锁定操作、隐藏 Mesh、解绑输入、清除换弹状态
+// 流程：锁定武器操作 → 未装备时显示 Mesh 并恢复弹夹 → 已装备时隐藏 Mesh 并隐藏弹夹 → 解绑输入 → 清除角色 Reloading 状态
 void AWeaponActor::HandleDeactivateWeaponVisuals()
 {
     SetWeaponActionsLocked(true);
@@ -244,6 +251,8 @@ void AWeaponActor::HandleDeactivateWeaponVisuals()
     }
 }
 
+// 停用武器状态
+// 流程：设置 bIsActiveWeapon = false → 禁用 Tick → 调用停用视觉效果
 void AWeaponActor::HandleDeactivateWeapon()
 {
     bIsActiveWeapon = false;
@@ -256,6 +265,8 @@ void AWeaponActor::DropWeapon()
     HandleDropWeapon();
 }
 
+// 丢弃武器：停止射击、卸载 Mesh、应用物理、清理状态
+// 流程：停止射击和音效 → 解绑输入 → 禁用 Tick → 从角色卸载 Mesh → DetachFromActor → 应用掉落物理（位置/旋转/冲量）→ 延迟 0.5s 启用拾取组件 → 清空状态和处理器
 void AWeaponActor::HandleDropWeapon()
 {
     if (!bIsEquipped || !OwningCharacter) return;
@@ -289,9 +300,8 @@ void AWeaponActor::HandleDropWeapon()
         WeaponMesh->SetVisibility(false, true);
 }
 
-
-
-// ---------- 输入绑定 ----------
+// 绑定 EnhancedInput 动作到武器回调
+// 流程：获取 PlayerController → 获取 EnhancedInputComponent → 绑定 FireAction（Pressed/Released）、ReloadAction、ViewAction → 缓存绑定指针
 void AWeaponActor::BindInput()
 {
     if (!OwningCharacter || !bIsActiveWeapon) return;
@@ -319,6 +329,8 @@ void AWeaponActor::BindInput()
     }
 }
 
+// 解绑所有 EnhancedInput 动作
+// 流程：依次移除 FirePressed/FireReleased/Reload/View 绑定 → 清空绑定指针和缓存组件
 void AWeaponActor::UnbindInput()
 {
     if (!CachedInputComponent) return;
@@ -346,25 +358,32 @@ void AWeaponActor::UnbindInput()
     CachedInputComponent = nullptr;
 }
 
+// 尝试绑定输入（用于 OnRep_Owner 延迟绑定场景）
+// 流程：若 CachedInputComponent 为空且武器已激活且有 OwningCharacter → 调用 BindInput
 void AWeaponActor::TryBindInput()
 {
     if (!CachedInputComponent && bIsActiveWeapon && OwningCharacter)
         BindInput();
 }
 
+// 输入按下回调：设置按住标记并开火
+// 流程：设置 bFireInputHeld = true → 调用 Fire()
 void AWeaponActor::OnFirePressed()
 {
     bFireInputHeld = true;
     Fire();
 }
 
+// 输入释放回调：清除按住标记并停火
+// 流程：设置 bFireInputHeld = false → 调用 StopFire()
 void AWeaponActor::OnFireReleased()
 {
     bFireInputHeld = false;
     StopFire();
 }
 
-// ---------- 玩家动作 ----------
+// 拔枪动画：清除换弹状态，播放 FP 角色+武器蒙太奇和音效
+// 流程：清除角色 Reloading 状态 → 播放 C_Unholster + W_Unholster 蒙太奇 → 播放拔枪音效
 void AWeaponActor::Unholster()
 {
     if (!OwningCharacter || !AnimationConfig) return;
@@ -386,23 +405,21 @@ void AWeaponActor::StopFire()
     HandleStopFire();
 }
 
+// 换弹请求：客户端预测播放动画+音效，通知服务器执行权威逻辑
+// 流程：检查前置条件（换弹中/冲刺中/弹药满）→ 重置后坐力 → 设置角色 Reloading 状态并清除 Aiming → 设置弹夹换弹状态 → 本地播放 FP 动画+音效 → 客户端发 Server RPC / 服务器直接走 HandleReloadRequest
 void AWeaponActor::Reload()
 {
-    // ---------- 客户端预测（纯表现层）----------
     if (!OwningCharacter || !DataConfig) return;
     if (OwningCharacter->Reloading || OwningCharacter->Sprinting) return;
     if (CurrentAmmo >= DataConfig->MaxAmmo || TotalAmmo <= 0) return;
 
-    // 本地立即设置状态（无延迟）
     ResetRecoilPattern();
     OwningCharacter->Reloading = true;
     OwningCharacter->Aiming = false;
     OwningCharacter->ApplyMovementSpeed();
 
-    // 客户端弹夹可见性（换弹中：两个弹夹都可见）
     MeshManager.SetMagazineReloadState();
 
-    // 本地播放 FP 动画 + 音效
     const bool bEmptyReload = (CurrentAmmo == 0);
     if (AnimationConfig)
     {
@@ -414,18 +431,18 @@ void AWeaponActor::Reload()
     if (AudioConfig) ReloadSfx = (bEmptyReload && AudioConfig->ReloadEmptySound) ? AudioConfig->ReloadEmptySound : AudioConfig->ReloadSound;
     PlaySound(ReloadSfx);
 
-    // 通知服务器
     if (!OwningCharacter->HasAuthority())
     {
         Server_RequestReload();
     }
     else
     {
-        // 服务器本地（AI）→ 直接走服务器路径
         HandleReloadRequest();
     }
 }
 
+// 检视武器：播放检视动画+音效，绑定蒙太奇结束委托，通知服务器
+// 流程：检查前置条件 → 设置角色 Viewing 状态并清除 Aiming → 播放 FP 检视动画+音效 → 绑定 OnViewMontageEnded 委托 → 无动画则直接完成 → 客户端发 Server RPC
 void AWeaponActor::View()
 {
     if (bWeaponActionsLocked || !OwningCharacter || !OwningCharacter->GetController() || !bIsActiveWeapon || !AnimationConfig)
@@ -435,7 +452,6 @@ void AWeaponActor::View()
     OwningCharacter->Viewing = true;
     OwningCharacter->Aiming = false;
 
-    // 本地播放 FP 动画 + 音效
     PlayFPCharacterAndWeaponMontage(AnimationConfig->C_ViewAnimation, nullptr);
     if (AudioConfig) PlaySound(AudioConfig->ViewSound);
 
@@ -456,11 +472,12 @@ void AWeaponActor::View()
     if (!bDelegateBound)
         HandleViewFinished();
 
-    // 通知服务器同步状态
     if (!OwningCharacter->HasAuthority())
         Server_RequestView(true);
 }
 
+// 停止检视：中断检视动画并清理状态
+// 流程：检查检视动画是否在播放 → 停止所有蒙太奇并清理音效 → 调用 HandleViewFinished → 客户端发 Server RPC 同步状态
 void AWeaponActor::StopView()
 {
     if (!OwningCharacter || !AnimationConfig) return;
@@ -472,12 +489,12 @@ void AWeaponActor::StopView()
         HandleViewFinished();
     }
 
-    // 通知服务器同步状态
     if (!OwningCharacter->HasAuthority())
         Server_RequestView(false);
 }
 
-// ---------- 射击核心 ----------
+// 开始射击：检查弹药和冷却，执行射击或触发换弹/空仓反馈
+// 流程：检查前置条件（锁定/换弹/冲刺）→ 无弹药时尝试换弹或播放空仓音效 → 检查射击间隔冷却 → 调用 PerformFire_Local → 全自动模式启动 AutoFireTimer
 void AWeaponActor::HandleStartFire()
 {
     if (!OwningCharacter || bWeaponActionsLocked || !bIsActiveWeapon || !DataConfig) return;
@@ -494,7 +511,6 @@ void AWeaponActor::HandleStartFire()
         return;
     }
 
-    // 防止 StopFire/StartFire 快速交替导致的重复射击
     const float TimeSinceLastShot = GetWorld()->GetTimeSeconds() - LastFireTime;
     if (TimeSinceLastShot >= DataConfig->FireInterval * 0.8f)
     {
@@ -507,12 +523,16 @@ void AWeaponActor::HandleStartFire()
     }
 }
 
+// 停止射击：清除全自动射击定时器
+// 流程：检查 AutoFireTimer 是否活跃 → 是则清除
 void AWeaponActor::HandleStopFire()
 {
     if (GetWorldTimerManager().IsTimerActive(AutoFireTimerHandle))
         GetWorldTimerManager().ClearTimer(AutoFireTimerHandle);
 }
 
+// 全自动射击定时器回调：检查弹药和状态，执行射击或触发换弹/停火
+// 流程：检查前置条件 → 无弹药时换弹或空仓停火 → 有弹药则调用 PerformFire_Local
 void AWeaponActor::HandleAutoFire()
 {
     if (!OwningCharacter || OwningCharacter->Reloading || OwningCharacter->Sprinting || !DataConfig) return;
@@ -532,13 +552,14 @@ void AWeaponActor::HandleAutoFire()
     PerformFire_Local();
 }
 
+// 本地执行射击：计算扩散方向，服务器执行权威逻辑，客户端本地预测表现
+// 流程：记录射击时间 → 计算带扩散的射击方向 → 服务器：本地 LineTrace 预测 VFX + 调用权威射击 RPC → 客户端：本地扣弹药 + LineTrace 预测 VFX + 播放动画/音效/后坐力 + 发送 Server_RequestFire
 void AWeaponActor::PerformFire_Local()
 {
     if (!OwningCharacter) return;
 
     LastFireTime = GetWorld()->GetTimeSeconds();
 
-    // 计算射击方向（含扩散）
     const FVector Forward = OwningCharacter->GetShootRotation().Vector();
     FVector ShotDir = Forward;
     float Spread = SpreadHandler.GetTotalSpreadAngle(DataConfig);
@@ -547,10 +568,8 @@ void AWeaponActor::PerformFire_Local()
         ShotDir = UKismetMathLibrary::RandomUnitVectorInConeInRadians(Forward, FMath::DegreesToRadians(Spread));
     }
 
-    // 服务器本地执行（AI / Listen Server 主机）→ 直接走权威路径
     if (OwningCharacter->HasAuthority())
     {
-        // 本地 LineTrace 用于 VFX 命中点预测
         FHitResult AuthorityHit;
         FCollisionQueryParams AuthorityParams;
         AuthorityParams.AddIgnoredActor(OwningCharacter);
@@ -562,7 +581,6 @@ void AWeaponActor::PerformFire_Local()
         const bool bIsLocalPlayer = OwningCharacter->IsPlayerControlled() && OwningCharacter->IsLocallyControlled();
         if (bIsLocalPlayer)
         {
-            // Listen Server 主机：FP 动画 + 音效 + VFX + 后坐力 + 扩散
             const bool bWasAiming = OwningCharacter->Aiming;
             if (AnimationConfig)
             {
@@ -575,23 +593,19 @@ void AWeaponActor::PerformFire_Local()
         }
         else if (!OwningCharacter->IsPlayerControlled())
         {
-            // AI：TP 动画 + 音效 + VFX（无 FP 动画、无相机后坐力）
             if (AnimationConfig)
                 PlayTPCharacterMontage(AnimationConfig->TP_FireAnimation);
             if (AudioConfig) PlaySound(AudioConfig->FireSound);
             HandleFireVFX(AuthorityImpactPoint);
         }
 
-        // 服务器权威：射线检测 + 伤害
         Server_RequestFire_Implementation(OwningCharacter->GetShootLocation(), ShotDir);
         HandleFireFinished();
         return;
     }
 
-    // ---------- 客户端预测（纯表现层）----------
     CurrentAmmo = FMath::Max(CurrentAmmo - 1, 0);
 
-    // 本地 LineTrace（仅用于表现层 VFX 预测，不影响伤害）
     FHitResult Hit;
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(OwningCharacter);
@@ -600,7 +614,6 @@ void AWeaponActor::PerformFire_Local()
     const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + ShotDir * 10000.f, ECC_GameTraceChannel1, Params);
     const FVector ImpactPoint = bHit ? Hit.ImpactPoint : (Start + ShotDir * 5000.f);
 
-    // 本地播放动画和音效（无延迟）
     const bool bWasAiming = OwningCharacter->Aiming;
     if (AnimationConfig)
     {
@@ -611,7 +624,6 @@ void AWeaponActor::PerformFire_Local()
     SpreadHandler.AddSpreadOnFire(DataConfig);
     RecoilHandler.ApplyRecoil(DataConfig);
 
-    // 发送给服务器（服务器做权威射线检测和伤害）
     Server_RequestFire(Start, ShotDir);
 
     HandleFireFinished();
@@ -622,14 +634,14 @@ bool AWeaponActor::Server_RequestFire_Validate(FVector ShootLocation, FVector Sh
     return OwningCharacter != nullptr && !OwningCharacter->IsDead();
 }
 
+// Server RPC：服务器权威射击逻辑
+// 流程：权威扣弹药 → 权威射线检测 → 命中时调用 ApplyDamage → 命中角色时广播 OnHitConfirmed → 报告 AI 听觉噪音 → Multicast 广播表现给远程客户端
 void AWeaponActor::Server_RequestFire_Implementation(FVector ShootLocation, FVector ShotDirection)
 {
     if (!OwningCharacter || !DataConfig) return;
 
-    // 服务器权威扣弹药
     CurrentAmmo = FMath::Max(CurrentAmmo - 1, 0);
 
-    // 服务器权威射线检测
     FHitResult Hit;
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(OwningCharacter);
@@ -640,64 +652,65 @@ void AWeaponActor::Server_RequestFire_Implementation(FVector ShootLocation, FVec
     {
         ApplyDamage(Hit, ShotDirection);
 
-        // 仅命中玩家/AI角色时广播命中委托（不触发环境物体命中反馈）
         if (AFPS_CharacterBase* HitChar = Cast<AFPS_CharacterBase>(Hit.GetActor()))
         {
             OnHitConfirmed.Broadcast(HitChar->IsDead());
         }
     }
 
-    // AI 听觉噪音
     UAISense_Hearing::ReportNoiseEvent(GetWorld(), OwningCharacter->GetActorLocation(),
         1.0f, OwningCharacter, 2500.0f, TEXT("Gunshot"));
 
-    // 广播给远程客户端播放枪声/VFX
     Multicast_OnFire(bHit ? Hit.ImpactPoint : (ShootLocation + ShotDirection * 5000.f), bHit);
 }
 
+// Multicast RPC：远程客户端播放射击表现
+// 流程：跳过本地射击者（已本地预测）→ 远程客户端播放 TP 蒙太奇 + 枪声 + VFX
 void AWeaponActor::Multicast_OnFire_Implementation(FVector ImpactPoint, bool bHit)
 {
-    // 跳过本地射击者（已本地预测播放）
     if (OwningCharacter && OwningCharacter->IsLocallyControlled()) return;
 
-    // 远程客户端：播放 TP 蒙太奇 + 枪声 + VFX
     if (AnimationConfig)
         PlayTPCharacterMontage(AnimationConfig->TP_FireAnimation);
     if (AudioConfig) PlaySound(AudioConfig->FireSound);
     HandleFireVFX(ImpactPoint);
 }
 
-// ---------- 换弹网络 RPC ----------
 bool AWeaponActor::Server_RequestReload_Validate()
 {
     return OwningCharacter != nullptr && !OwningCharacter->IsDead();
 }
 
+// Server RPC：转发换弹请求到权威逻辑
+// 流程：调用 HandleReloadRequest
 void AWeaponActor::Server_RequestReload_Implementation()
 {
     HandleReloadRequest();
 }
 
+// Multicast RPC：所有客户端恢复弹夹正常可见性
+// 流程：调用 MeshManager.SetMagazineNormalState
 void AWeaponActor::Multicast_OnReloadComplete_Implementation()
 {
-    // 所有客户端（含本地玩家）恢复弹夹可见性
     MeshManager.SetMagazineNormalState();
 }
 
-// ---------- 检视网络 RPC ----------
 bool AWeaponActor::Server_RequestView_Validate(bool bNewViewing)
 {
     return OwningCharacter != nullptr;
 }
 
+// Server RPC：服务器同步检视状态
+// 流程：设置角色 Viewing 状态 → 开始检视时清除 Aiming 状态
 void AWeaponActor::Server_RequestView_Implementation(bool bNewViewing)
 {
-    // 服务器只转发状态，不播放动画
     OwningCharacter->Viewing = bNewViewing;
     if (bNewViewing)
         OwningCharacter->Aiming = false;
 }
 
+// 执行射线检测（含扩散），用于暴露给外部调用
+// 流程：计算射击起点和带扩散的方向 → 设置碰撞参数忽略持有者和自身 → LineTraceSingleByChannel
 bool AWeaponActor::PerformLineTrace(FHitResult& OutHit, FVector& OutShotDirection) const
 {
     if (!OwningCharacter) return false;
@@ -721,11 +734,12 @@ bool AWeaponActor::PerformLineTrace(FHitResult& OutHit, FVector& OutShotDirectio
     return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_GameTraceChannel1, Params);
 }
 
+// 对命中结果施加物理冲量和伤害
+// 流程：对物理模拟组件施加冲量 → 计算带浮动的伤害值 → 调用 ApplyPointDamage
 void AWeaponActor::ApplyDamage(const FHitResult& Hit, const FVector& ShotDirection)
 {
     if (!DataConfig) return;
 
-    // 对物理模拟组件施加冲量（环境物体、可破坏物等）
     if (UPrimitiveComponent* HitComp = Hit.GetComponent())
     {
         if (HitComp->IsSimulatingPhysics())
@@ -734,7 +748,6 @@ void AWeaponActor::ApplyDamage(const FHitResult& Hit, const FVector& ShotDirecti
         }
     }
 
-    // 对 Actor 施加伤害
     if (AActor* HitActor = Hit.GetActor())
     {
         float FinalDamage = FMath::Max(DataConfig->BaseDamage + FMath::FRandRange(-DataConfig->DamageVariance, DataConfig->DamageVariance), 0.f);
@@ -743,16 +756,18 @@ void AWeaponActor::ApplyDamage(const FHitResult& Hit, const FVector& ShotDirecti
     }
 }
 
+// 通知持有者武器弹药耗尽
+// 流程：调用 OwningCharacter->HandleActiveWeaponOutOfAmmo
 void AWeaponActor::NotifyOwnerOutOfAmmo()
 {
     if (OwningCharacter)
-        OwningCharacter->HandleActiveWeaponOutOfAmmo(this); // 假设存在该方法，否则可移除
+        OwningCharacter->HandleActiveWeaponOutOfAmmo(this);
 }
 
-// ---------- 换弹 ----------
+// 服务器换弹请求：设置状态、播放 TP 动画、启动换弹完成定时器
+// 流程：检查前置条件 → 设置角色 Reloading 状态并清除 Aiming → 设置弹夹换弹状态 → 播放 TP 换弹蒙太奇 → 以 FP 动画时长为基准启动定时器等待 HandleReloadComplete
 void AWeaponActor::HandleReloadRequest()
 {
-    // 服务器路径：设置状态 + TP 动画 + 启动计时器
     if (bWeaponActionsLocked || !OwningCharacter || !DataConfig) return;
 
     OwningCharacter->Reloading = true;
@@ -761,7 +776,6 @@ void AWeaponActor::HandleReloadRequest()
 
     MeshManager.SetMagazineReloadState();
 
-    // TP 动画（服务器本地 Mesh）
     const bool bEmptyReload = (CurrentAmmo == 0);
     if (AnimationConfig)
     {
@@ -769,7 +783,6 @@ void AWeaponActor::HandleReloadRequest()
         PlayTPCharacterMontage(TP_Montage);
     }
 
-    // 用 FP 动画时长作为计时器（与客户端预测同步）
     UAnimMontage* C_Montage = nullptr;
     if (AnimationConfig)
         C_Montage = (bEmptyReload && AnimationConfig->C_ReloadEmptyAnimation) ? AnimationConfig->C_ReloadEmptyAnimation : AnimationConfig->C_ReloadAnimation;
@@ -777,25 +790,26 @@ void AWeaponActor::HandleReloadRequest()
     GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AWeaponActor::HandleReloadComplete, Duration, false);
 }
 
+// 换弹完成：补充弹药、清除状态、广播通知
+// 流程：清除定时器 → 权威补充弹药 → 清除角色 Reloading 状态 → 恢复弹夹可见性 → Multicast 通知所有客户端 → 广播 OnWeaponReady
 void AWeaponActor::HandleReloadComplete()
 {
     GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
     if (!OwningCharacter) return;
 
-    // 服务器权威：补充弹药 + 清除状态
     RefillAmmo();
     OwningCharacter->Reloading = false;
     OwningCharacter->ApplyMovementSpeed();
 
-    // 恢复弹夹可见性（服务器本地）
     MeshManager.SetMagazineNormalState();
 
-    // 广播给远程客户端恢复弹夹可见性
     Multicast_OnReloadComplete();
 
     OnWeaponReady.Broadcast();
 }
 
+// 补充弹药：从备弹转移到弹匣
+// 流程：计算所需弹药 = MaxAmmo - CurrentAmmo → 转移量 = min(所需, TotalAmmo) → TotalAmmo -= 转移量 → CurrentAmmo += 转移量
 void AWeaponActor::RefillAmmo()
 {
     int Needed = DataConfig->MaxAmmo - CurrentAmmo;
@@ -804,7 +818,8 @@ void AWeaponActor::RefillAmmo()
     CurrentAmmo += Transfer;
 }
 
-// ---------- 蒙太奇辅助 ----------
+// 同时播放 FP 角色和武器蒙太奇，根据蒙太奇类型绑定结束委托
+// 流程：获取角色 FP AnimInstance 和武器 AnimInstance → 播放角色蒙太奇 → 根据蒙太奇类型绑定 Fire/Reload 结束委托 → 播放武器蒙太奇 → 返回最大时长
 float AWeaponActor::PlayFPCharacterAndWeaponMontage(UAnimMontage* CharMontage, UAnimMontage* WeaponMontage)
 {
     if (!OwningCharacter || !bIsEquipped) return 0.f;
@@ -847,6 +862,8 @@ float AWeaponActor::PlayFPCharacterAndWeaponMontage(UAnimMontage* CharMontage, U
     return MaxDuration;
 }
 
+// 播放第三人称角色蒙太奇
+// 流程：获取角色 TP Mesh → 获取 AnimInstance → Montage_Play
 void AWeaponActor::PlayTPCharacterMontage(UAnimMontage* CharMontage)
 {
     if (!OwningCharacter || !CharMontage) return;
@@ -857,28 +874,37 @@ void AWeaponActor::PlayTPCharacterMontage(UAnimMontage* CharMontage)
     }
 }
 
+// 射击蒙太奇结束回调
+// 流程：调用 HandleFireFinished
 void AWeaponActor::OnFireMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
     HandleFireFinished();
 }
 
+// 换弹蒙太奇结束回调（可能被中断，不做处理，真正的完成在定时器）
+// 流程：无操作
 void AWeaponActor::OnReloadMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-    // 可能被中断，不做处理；真正的完成在定时器
 }
 
+// 检视蒙太奇结束回调
+// 流程：调用 HandleViewFinished
 void AWeaponActor::OnViewMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
     HandleViewFinished();
 }
 
+// 射击完成处理：允许冲刺并广播武器就绪
+// 流程：设置角色 CanSprint = true → 广播 OnWeaponReady
 void AWeaponActor::HandleFireFinished()
 {
     if (OwningCharacter)
         OwningCharacter->CanSprint = true;
-    OnWeaponReady.Broadcast(); // 简化：直接广播
+    OnWeaponReady.Broadcast();
 }
 
+// 换弹完成处理：清除角色换弹状态，恢复弹夹可见性
+// 流程：设置角色 Reloading = false → 恢复弹夹正常状态
 void AWeaponActor::HandleReloadFinished()
 {
     if (OwningCharacter)
@@ -886,13 +912,16 @@ void AWeaponActor::HandleReloadFinished()
     MeshManager.SetMagazineNormalState();
 }
 
+// 检视完成处理：清除角色检视状态
+// 流程：设置角色 Viewing = false
 void AWeaponActor::HandleViewFinished()
 {
     if (OwningCharacter)
         OwningCharacter->Viewing = false;
 }
 
-// ---------- 音效 ----------
+// 在角色位置生成音效
+// 流程：检查 Sound 和 OwningCharacter → 处理跳过标记 → 停止当前音效 → 生成新音效并缓存
 void AWeaponActor::PlaySound(USoundBase* Sound)
 {
     if (!Sound || !OwningCharacter) return;
@@ -905,6 +934,8 @@ void AWeaponActor::PlaySound(USoundBase* Sound)
     ActiveAudioComponent = UGameplayStatics::SpawnSoundAtLocation(this, Sound, OwningCharacter->GetActorLocation());
 }
 
+// 停止当前活跃音效
+// 流程：若 ActiveAudioComponent 有效则调用 Stop → 清空指针
 void AWeaponActor::StopActiveSound()
 {
     if (ActiveAudioComponent.IsValid())
@@ -914,7 +945,8 @@ void AWeaponActor::StopActiveSound()
     ActiveAudioComponent = nullptr;
 }
 
-// ---------- 视觉效果 ----------
+// 在枪口发射点生成射击粒子特效，传入命中点局部坐标
+// 流程：获取 SOCKET_EmitPoint 插槽变换 → SpawnEmitterAttached → 设置 HitPointLocation 参数
 void AWeaponActor::HandleFireVFX(const FVector& HitPoint)
 {
     if (!FireVFX || !OwningCharacter) return;
@@ -933,7 +965,8 @@ void AWeaponActor::HandleFireVFX(const FVector& HitPoint)
     }
 }
 
-// ---------- 拾取与掉落物理 ----------
+// 装备后禁用拾取组件物理和碰撞
+// 流程：禁用 WeaponMeshStatic 物理模拟和碰撞 → 禁用 PickupComponent
 void AWeaponActor::HandlePickupComponentPostEquip()
 {
     if (WeaponMeshStatic)
@@ -944,6 +977,8 @@ void AWeaponActor::HandlePickupComponentPostEquip()
     EnablePickupComponent(false);
 }
 
+// 启用/禁用拾取组件碰撞
+// 流程：设置 bPickupComponentDisabled 标记 → 启用时设为 QueryOnly 并开启 Overlap → 禁用时设为 NoCollision
 void AWeaponActor::EnablePickupComponent(bool bEnable)
 {
     if (!PickupComponent) return;
@@ -960,6 +995,8 @@ void AWeaponActor::EnablePickupComponent(bool bEnable)
     }
 }
 
+// 应用掉落物理状态到 WeaponMeshStatic
+// 流程：设置碰撞为 QueryAndPhysics → WorldDynamic 类型 → 阻挡所有通道忽略 Pawn → 有物理资产则启用物理模拟
 void AWeaponActor::ApplyDroppedPhysicsState()
 {
     if (!WeaponMeshStatic) return;
@@ -975,6 +1012,8 @@ void AWeaponActor::ApplyDroppedPhysicsState()
     }
 }
 
+// 将武器物理丢弃到屏幕前方
+// 流程：应用掉落物理状态 → 设置位置为视野前方偏上 → 设置朝前旋转 → 施加线速度和随机角速度冲量
 void AWeaponActor::DropWeaponPhysically(const FVector& ViewLoc, const FRotator& ViewRot)
 {
     ApplyDroppedPhysicsState();
@@ -997,7 +1036,8 @@ void AWeaponActor::DropWeaponPhysically(const FVector& ViewLoc, const FRotator& 
     }
 }
 
-// ---------- 自动销毁 ----------
+// 启动自动销毁定时器（未拾取武器超时销毁）
+// 流程：若已装备则跳过 → UnpickedLifeSpan <= 0 时直接销毁 → 否则设置定时器到期后 HandleAutoDestroyTimerExpired
 void AWeaponActor::ScheduleAutoDestroy()
 {
     if (bIsEquipped) return;
@@ -1009,23 +1049,30 @@ void AWeaponActor::ScheduleAutoDestroy()
     GetWorldTimerManager().SetTimer(AutoDestroyTimerHandle, this, &AWeaponActor::HandleAutoDestroyTimerExpired, UnpickedLifeSpan, false);
 }
 
+// 取消自动销毁定时器
+// 流程：清除 AutoDestroyTimerHandle
 void AWeaponActor::CancelAutoDestroy()
 {
     GetWorldTimerManager().ClearTimer(AutoDestroyTimerHandle);
 }
 
+// 自动销毁定时器到期：未装备则销毁
+// 流程：检查 bIsEquipped → 未装备则调用 Destroy()
 void AWeaponActor::HandleAutoDestroyTimerExpired()
 {
     if (!bIsEquipped)
         Destroy();
 }
 
-// ---------- 扩散（委托给 SpreadHandler） ----------
+// 获取当前总扩散角度（委托给 SpreadHandler）
+// 流程：调用 SpreadHandler.GetTotalSpreadAngle
 float AWeaponActor::GetTotalSpreadAngle() const
 {
     return SpreadHandler.GetTotalSpreadAngle(DataConfig);
 }
 
+// 设置武器操作锁定状态
+// 流程：去重检查 → 设置 bWeaponActionsLocked → 锁定时清除按住标记并停火
 void AWeaponActor::SetWeaponActionsLocked(bool bLocked)
 {
     if (bWeaponActionsLocked == bLocked) return;
@@ -1037,6 +1084,8 @@ void AWeaponActor::SetWeaponActionsLocked(bool bLocked)
     }
 }
 
+// 重置后坐力图案索引
+// 流程：调用 RecoilHandler.Reset()
 void AWeaponActor::ResetRecoilPattern()
 {
     RecoilHandler.Reset();

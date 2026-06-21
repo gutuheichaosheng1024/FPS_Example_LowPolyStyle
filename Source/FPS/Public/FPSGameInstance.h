@@ -34,6 +34,13 @@ struct FPS_API FRoomInfo
 	int32 ResultIndex = 0;
 };
 
+/**
+ * UFPSGameInstance — 游戏实例，管理在线 Session（创建/搜索/加入/销毁房间）与 UI ZOrder
+ *
+ * 职责：LAN Session 生命周期管理（CreateRoom/FindRooms/JoinRoom/DestroySession）、
+ *       Session 异步回调处理与重入防护、房间列表缓存与委托广播、UI ZOrder 计数器
+ * 使用：IOnlineSessionPtr, FOnlineSessionSearch
+ */
 UCLASS()
 class FPS_API UFPSGameInstance : public UGameInstance
 {
@@ -41,8 +48,6 @@ class FPS_API UFPSGameInstance : public UGameInstance
 
 public:
 	virtual void Init() override;
-
-	// ---------- Blueprint 接口 ----------
 
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void CreateRoom(const FString& ServerName);
@@ -56,15 +61,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void DestroyCurrentSession();
 
-	// ---------- 委托 ----------
-
 	UPROPERTY(BlueprintAssignable, Category = "Network")
 	FOnRoomListUpdated OnRoomListUpdated;
 
 	UPROPERTY(BlueprintAssignable, Category = "Network")
 	FOnCreateRoomSuccess OnCreateRoomSuccess;
-
-	// ---------- 数据访问 ----------
 
 	UFUNCTION(BlueprintPure, Category = "Network")
 	const TArray<FRoomInfo>& GetRoomList() const { return RoomList; }
@@ -72,27 +73,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Network")
 	bool IsSearching() const;
 
-	// ---------- UI 管理 ----------
-
-	/** 获取全局 UI ZOrder 计数器 */
 	int32 GetNextZOrder() { return UIZOrderCounter++; }
 
-	/** 创建房间（带地图名） */
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void CreateRoomWithMap(const FString& ServerName, const FString& MapName);
 
-	/** 返回主菜单（销毁会话并加载 Lvl_MainMenu） */
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void ReturnToMainMenu();
 
 private:
-	// ---------- Session 回调 ----------
 	void OnCreateSessionComplete(FName SessionName, bool bSuccess);
 	void OnFindSessionsComplete(bool bSuccess);
 	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 	void OnDestroySessionComplete(FName SessionName, bool bSuccess);
 
-	// ---------- 内部状态 ----------
 	void BindSessionDelegates();
 	void ExecuteCreateSession(const FString& ServerName);
 	void ExecuteFindRooms();
@@ -103,21 +97,15 @@ private:
 
 	TArray<FRoomInfo> RoomList;
 
-	// Destroy 后延迟创建
 	FString PendingServerName;
 	FString PendingMapName;
 	FString CurrentMapName;
 
-	// UI ZOrder 计数器
 	int32 UIZOrderCounter = 0;
 
-	// 防止 Session 操作重入（Destroy 异步期间阻止新的 Create）
 	bool bSessionOperationPending = false;
-
-	// DestroySession 完成后是否需要执行搜索
 	bool bPendingFindRooms = false;
 
-	// 委托句柄
 	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;
 	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
 	FOnJoinSessionCompleteDelegate JoinSessionCompleteDelegate;

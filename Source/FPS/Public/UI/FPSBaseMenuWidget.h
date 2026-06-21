@@ -7,8 +7,10 @@
 class UFPSGameInstance;
 
 /**
- * 菜单 Widget 公共基类
- * 提供子窗口缓存、父窗口导航、ZOrder 管理
+ * UFPSBaseMenuWidget — 菜单 Widget 公共基类，提供子窗口缓存、父窗口导航和 ZOrder 管理
+ *
+ * 职责：管理子窗口的创建与缓存；通过 CachedParent 实现父子窗口导航；委托 GameInstance 分配全局 ZOrder
+ * 使用：UFPSGameInstance
  */
 UCLASS(Abstract)
 class FPS_API UFPSBaseMenuWidget : public UUserWidget
@@ -16,23 +18,18 @@ class FPS_API UFPSBaseMenuWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
-    /** 父窗口引用（由 OpenSubScreen 自动设置） */
     UPROPERTY(BlueprintReadOnly, Category = "Navigation")
     UUserWidget* CachedParent = nullptr;
 
-    /** 打开子窗口（自动缓存、设置父引用、管理 ZOrder） */
     UFUNCTION(BlueprintCallable, Category = "Navigation")
     void OpenSubScreen(TSubclassOf<UUserWidget> SubScreenClass);
 
-    /** 关闭自身，显示父窗口 */
     UFUNCTION(BlueprintCallable, Category = "Navigation")
     void CloseSelf();
 
 protected:
-    /** 已打开的子窗口缓存 */
     UPROPERTY()
     TMap<TSubclassOf<UUserWidget>, UUserWidget*> CachedSubScreens;
 
-    /** 获取全局 ZOrder 计数器 */
     int32 GetNextZOrder();
 };

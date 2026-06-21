@@ -1,15 +1,15 @@
 #include "UI/FPSBaseMenuWidget.h"
 #include "FPSGameInstance.h"
 
+// 打开子窗口，若已缓存则复用，否则创建并缓存后显示，同时隐藏自身
+// 流程：查找缓存 → 不存在则创建并缓存 → 设置子窗口 CachedParent → 显示子窗口并隐藏自身
 void UFPSBaseMenuWidget::OpenSubScreen(TSubclassOf<UUserWidget> SubScreenClass)
 {
     if (!SubScreenClass) return;
 
-    // 查找缓存
     UUserWidget** Found = CachedSubScreens.Find(SubScreenClass);
     UUserWidget* Child = Found ? *Found : nullptr;
 
-    // 不存在则创建
     if (!Child)
     {
         Child = CreateWidget<UUserWidget>(GetOwningPlayer(), SubScreenClass);
@@ -17,20 +17,19 @@ void UFPSBaseMenuWidget::OpenSubScreen(TSubclassOf<UUserWidget> SubScreenClass)
         CachedSubScreens.Add(SubScreenClass, Child);
     }
 
-    // 设置父引用（通过基类方法，无需反射）
     if (UFPSBaseMenuWidget* BaseChild = Cast<UFPSBaseMenuWidget>(Child))
     {
         BaseChild->CachedParent = this;
     }
 
-    // 显示子窗口
     Child->SetVisibility(ESlateVisibility::Visible);
     Child->AddToViewport(GetNextZOrder());
 
-    // 隐藏自身
     SetVisibility(ESlateVisibility::Collapsed);
 }
 
+// 关闭自身，恢复父窗口的显示
+// 流程：隐藏自身 → 如果 CachedParent 存在则恢复其显示
 void UFPSBaseMenuWidget::CloseSelf()
 {
     SetVisibility(ESlateVisibility::Collapsed);
@@ -42,6 +41,8 @@ void UFPSBaseMenuWidget::CloseSelf()
     }
 }
 
+// 从 GameInstance 获取全局 ZOrder 计数器
+// 流程：Cast 到 UFPSGameInstance → 调用 GetNextZOrder → 失败返回 0
 int32 UFPSBaseMenuWidget::GetNextZOrder()
 {
     if (UFPSGameInstance* GI = Cast<UFPSGameInstance>(GetGameInstance()))

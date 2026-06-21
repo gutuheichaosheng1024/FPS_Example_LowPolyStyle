@@ -22,6 +22,8 @@ void FWeaponSpreadHandler::ClearCharacter()
     TimeSinceLastShot = 0.f;
 }
 
+// 每帧更新射击扩散：基于时间渐进衰减到最小值
+// 流程：检查 ResetTime 是否有效 → 累加距上次射击的时间 → 计算衰减比例 Alpha → 从 ReturnStartValue 插值到 ShootSpreadMin
 void FWeaponSpreadHandler::UpdateSpread(float DeltaTime, const UWeaponDataConfig* Config)
 {
     if (!Config) return;
@@ -35,16 +37,19 @@ void FWeaponSpreadHandler::UpdateSpread(float DeltaTime, const UWeaponDataConfig
     CurrentShootSpread = FMath::Lerp(SpreadReturnStartValue, Config->ShootSpreadMin, Alpha);
 }
 
+// 开火时累积射击扩散
+// 流程：跳过 AI（AI 不累积射击扩散）→ 当前扩散 += ShootSpreadPerShot → 钳制到 Min/Max 范围 → 记录 ReturnStartValue → 重置计时器
 void FWeaponSpreadHandler::AddSpreadOnFire(const UWeaponDataConfig* Config)
 {
     if (!Config) return;
-    // AI 不累积射击扩散（无相机后坐力，累积会导致精度无限恶化）
     if (Character && !Character->IsPlayerControlled()) return;
     CurrentShootSpread = FMath::Clamp(CurrentShootSpread + Config->ShootSpreadPerShot, Config->ShootSpreadMin, Config->ShootSpreadMax);
     SpreadReturnStartValue = CurrentShootSpread;
     TimeSinceLastShot = 0.f;
 }
 
+// 计算当前总扩散角度
+// 流程：取移动扩散 → 玩家叠加射击扩散 → 瞄准时减半 → AI 乘以 AISpreadMultiplier → 返回最终角度
 float FWeaponSpreadHandler::GetTotalSpreadAngle(const UWeaponDataConfig* Config) const
 {
     if (!Config) return 0.f;
@@ -58,6 +63,8 @@ float FWeaponSpreadHandler::GetTotalSpreadAngle(const UWeaponDataConfig* Config)
     return Total;
 }
 
+// 计算移动扩散角度
+// 流程：取角色速度大小 → 计算速度因子（速度/MoveSpreadSpeedScale 钳制到 0~1）→ 在 MoveSpreadMin 和 MoveSpreadMax 之间插值
 float FWeaponSpreadHandler::GetMoveSpreadAngle(const UWeaponDataConfig* Config) const
 {
     if (!Character || !Config) return 0.f;

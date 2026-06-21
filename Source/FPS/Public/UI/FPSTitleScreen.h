@@ -8,8 +8,10 @@ class UButton;
 class UEditableTextBox;
 
 /**
- * 标题界面
- * 提供开始游戏、设置、退出三个入口
+ * UFPSTitleScreen — 标题界面，提供开始游戏、设置和退出三个入口按钮
+ *
+ * 职责：处理主菜单入口按钮点击事件；加载和保存玩家名称到本地存档；通过基类 OpenSubScreen 导航到大厅或设置界面
+ * 使用：UFPSBaseMenuWidget、UFPSSaveGame、UButton、UEditableTextBox
  */
 UCLASS(Abstract)
 class FPS_API UFPSTitleScreen : public UFPSBaseMenuWidget
@@ -17,27 +19,21 @@ class FPS_API UFPSTitleScreen : public UFPSBaseMenuWidget
     GENERATED_BODY()
 
 protected:
-    /** 开始游戏按钮 */
     UPROPERTY(meta = (BindWidget))
     UButton* StartButton;
 
-    /** 设置按钮 */
     UPROPERTY(meta = (BindWidget))
     UButton* SettingsButton;
 
-    /** 退出按钮 */
     UPROPERTY(meta = (BindWidget))
     UButton* ExitButton;
 
-    /** 玩家名输入框 */
     UPROPERTY(meta = (BindWidget))
     UEditableTextBox* PlayerNameInput;
 
-    /** 大厅界面类（蓝图 ClassDefaults 中设置） */
     UPROPERTY(EditDefaultsOnly, Category = "Navigation")
     TSubclassOf<UUserWidget> LobbyScreenClass;
 
-    /** 设置界面类（蓝图 ClassDefaults 中设置） */
     UPROPERTY(EditDefaultsOnly, Category = "Navigation")
     TSubclassOf<UUserWidget> SettingsScreenClass;
 
